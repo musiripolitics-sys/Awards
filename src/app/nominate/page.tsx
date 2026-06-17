@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import ParticleField from "@/components/ParticleField";
@@ -30,7 +31,13 @@ export default function NominatePage() {
 
         <section className="relative pb-32">
           <div className="mx-auto max-w-4xl px-5 sm:px-8">
-            <NominationForm />
+            <Suspense fallback={
+              <div className="glass rounded-2xl p-10 text-center text-[rgba(244,234,213,0.55)]">
+                Loading Nomination Console...
+              </div>
+            }>
+              <NominationForm />
+            </Suspense>
           </div>
         </section>
       </main>

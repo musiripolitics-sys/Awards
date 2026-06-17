@@ -20,7 +20,7 @@ export default function NominationCounter({ compact = false }: { compact?: boole
         console.error("Error fetching submission count from Supabase:", err);
       }
       // Baseline reflects the district's published tally — we only ever expose a number.
-      const baseline = 184;
+      const baseline = 0;
       setCount(baseline + real);
     }
 

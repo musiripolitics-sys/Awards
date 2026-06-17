@@ -25,7 +25,6 @@ export default function SiteFooter() {
           <ul className="space-y-2 text-sm">
             <li><Link href="/#categories" className="hover:text-[#e8d49a]">Categories</Link></li>
             <li><Link href="/#process" className="hover:text-[#e8d49a]">Nomination Process</Link></li>
-            <li><Link href="/winners" className="hover:text-[#e8d49a]">Hall of Honour</Link></li>
             <li><Link href="/nominate" className="hover:text-[#e8d49a]">Submit Nomination</Link></li>
           </ul>
         </div>
@@ -36,8 +35,8 @@ export default function SiteFooter() {
           </div>
           <ul className="space-y-2 text-sm text-[rgba(244,234,213,0.7)]">
             <li>awards@rotaractdistrict.org</li>
-            <li>Submissions close 30 Sep 2026</li>
-            <li>Ceremony · 12 Nov 2026</li>
+            <li>Submissions close 21 Jun 2026</li>
+            <li>Ceremony · 27 Jun 2026</li>
           </ul>
         </div>
       </div>

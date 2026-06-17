@@ -33,24 +33,24 @@ function Hero() {
       <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-8 text-center">
         <div className="inline-flex items-center gap-2 chip mb-8 animate-rise">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#d6ba73] animate-pulse-gold" />
-          Nominations open · Rotary Year 2025-26
+          Theme of the Year · Ignite Possibilities
         </div>
 
         <h1
           className="font-display text-[44px] sm:text-[68px] md:text-[88px] leading-[1.02] tracking-tight animate-rise"
           style={{ animationDelay: "0.05s" }}
         >
-          <span className="block text-[rgba(244,234,213,0.92)]">A night of</span>
-          <span className="block gold-text">brilliance &amp; service</span>
+          <span className="block text-[rgba(244,234,213,0.92)]">Ignite</span>
+          <span className="block gold-text">Possibilities</span>
         </h1>
 
         <p
           className="mt-7 mx-auto max-w-2xl text-[15px] sm:text-base text-[rgba(244,234,213,0.7)] leading-relaxed animate-rise"
           style={{ animationDelay: "0.15s" }}
         >
-          The Rotaract District Awards honour the projects, presidents and clubs that have moved
-          our district forward. Submit a nomination, share their story, and stand a chance to see
-          them on stage.
+          The Rotaract District Awards 2025-26 celebrate the projects, presidents, and clubs that embody 
+          our theme of the year. Submit your nomination, share their stories of outstanding impact, 
+          and let us ignite the endless possibilities of service.
         </p>
 
         <div
@@ -75,9 +75,9 @@ function Hero() {
           className="mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-[11px] uppercase tracking-[0.22em] text-[rgba(244,234,213,0.45)] animate-rise"
           style={{ animationDelay: "0.35s" }}
         >
-          <span>Submissions close · 30 Sep 2026</span>
+          <span>Submissions close · 21 Jun 2026</span>
           <span className="hidden sm:inline">·</span>
-          <span>Ceremony · 12 Nov 2026</span>
+          <span>Ceremony · 27 Jun 2026</span>
         </div>
 
         <TrophyMark />
@@ -214,8 +214,8 @@ function About() {
 
         <div className="mt-12 glass rounded-3xl p-6 sm:p-8 grid sm:grid-cols-3 gap-5 sm:gap-8">
           <KeyDate icon="scroll" label="Submissions open" value="Now" />
-          <KeyDate icon="medal" label="Submissions close" value="30 Sep 2026" />
-          <KeyDate icon="trophy" label="Awards ceremony" value="12 Nov 2026" />
+          <KeyDate icon="medal" label="Submissions close" value="21 Jun 2026" />
+          <KeyDate icon="trophy" label="Awards ceremony" value="27 Jun 2026" />
         </div>
       </div>
     </section>
@@ -315,7 +315,7 @@ function Categories() {
 function CategoryCard({ category }: { category: (typeof CATEGORIES)[number] }) {
   return (
     <Link
-      href="/nominate"
+      href={`/nominate?category=${category.id}`}
       className="group relative block rounded-2xl glass p-6 hover:ring-gold transition-all overflow-hidden"
     >
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(ellipse_at_top,rgba(214,186,115,0.12),transparent_60%)]" />
@@ -432,9 +432,6 @@ function Spotlight() {
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/nominate" className="btn-gold px-6 py-3 rounded-full text-sm font-semibold">
                   Begin Your Nomination
-                </Link>
-                <Link href="/winners" className="btn-ghost px-6 py-3 rounded-full text-sm">
-                  Hall of Honour →
                 </Link>
               </div>
             </div>

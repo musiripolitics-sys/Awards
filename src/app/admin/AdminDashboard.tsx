@@ -65,6 +65,7 @@ type Submission = {
   declarationName: string;
   declarationRole: string;
   declarationDate: string;
+  submittedBy?: string;
 };
 
 const STORAGE = "rotaract-submissions";
@@ -397,6 +398,7 @@ function SubmissionDrawer({
               }`}
             />
             <Info label="Submitted" value={formatDate(item.submittedAt)} />
+            {item.submittedBy && <Info label="Authenticated as" value={item.submittedBy} />}
           </DrawerSection>
 
           <DrawerSection title={`Project Nominations · ${projects.length}`}>

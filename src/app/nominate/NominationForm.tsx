@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   FLOW,
   PROJECT_SECTIONS,
@@ -226,7 +227,33 @@ const STORAGE_KEY = "rotaract-nomination-draft";
 
 type TerminalState = null | "thank-you" | "ineligible";
 
+const CATEGORY_STEP_MAP: Record<string, string> = {
+  "best-club-service-project": "project:club-service-1",
+  "best-professional-service-project": "project:professional-1",
+  "best-community-service-project": "project:community-1",
+  "best-international-service-project": "project:international-1",
+  "best-ongoing-project": "project:ongoing",
+  "best-legacy-project": "project:legacy",
+  "best-joint-project": "project:joint",
+  "best-multi-avenue-project": "project:multi-avenue",
+  "best-public-image-project": "project:public-image",
+  "best-innovative-project": "project:innovative",
+  "best-rotaract-club": "club-award",
+  "best-social-media": "social-media",
+  "happy-moment-award": "happy-moment",
+  "best-practice-award": "best-practice",
+  "president-of-the-year": "president",
+  "secretary-of-the-year": "secretary",
+  "star-of-rotaract": "star-of-rotaract",
+  "favorite-district-official": "favorite-do"
+};
+
 export default function NominationForm() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const categoryParam = searchParams.get("category");
+  const isSingleSectionMode = !!categoryParam;
+
   const [step, setStep] = useState(0);
   const [data, setData] = useState<FormState>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -235,28 +262,169 @@ export default function NominationForm() {
   const [hydrated, setHydrated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [loggedInClub, setLoggedInClub] = useState<{ username: string; clubName: string } | null>(null);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [dbRecordId, setDbRecordId] = useState<string | null>(null);
+  const [dbSubmittedAt, setDbSubmittedAt] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<string | null>(null);
 
   // Hydrate
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setData((d) => ({ ...d, ...parsed, projects: { ...d.projects, ...(parsed.projects || {}) } }));
-        if (typeof parsed.__step === "number") setStep(parsed.__step);
+    
+    async function initSession() {
+      try {
+        const session = sessionStorage.getItem("rotaract-club-session");
+        if (session) {
+          const parsedSession = JSON.parse(session);
+          setLoggedInClub(parsedSession);
+          
+          // Fetch existing submission from Supabase
+          const { data: existing, error } = await supabase
+            .from("submissions")
+            .select("*")
+            .eq("submittedBy", parsedSession.username)
+            .maybeSingle();
+          if (existing) {
+            setData(existing);
+            setDbRecordId(existing.id);
+            setDbSubmittedAt(existing.submittedAt);
+            setDbStatus(existing.status);
+          } else {
+            setData((d) => ({ ...d, clubName: parsedSession.clubName }));
+          }
+        }
+        
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setData((d) => ({ ...d, ...parsed, projects: { ...d.projects, ...(parsed.projects || {}) } }));
+          if (typeof parsed.__step === "number") setStep(parsed.__step);
+        }
+      } catch (err) {
+        console.error("Session initialization failed:", err);
+      } finally {
+        setHydrated(true);
       }
-    } catch {}
-    setHydrated(true);
+    }
+    
+    initSession();
   }, []);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoggingIn(true);
+    setLoginError(null);
+    try {
+      const { data: club, error } = await supabase
+        .from("clubs")
+        .select("*")
+        .eq("username", loginUsername.trim().toLowerCase())
+        .eq("password", loginPassword.trim())
+        .single();
+
+      if (error || !club) {
+        throw new Error("Invalid username or password.");
+      }
+
+      const sessionObj = { username: club.username, clubName: club.clubName };
+      sessionStorage.setItem("rotaract-club-session", JSON.stringify(sessionObj));
+      setLoggedInClub(sessionObj);
+      
+      // Fetch existing submission from Supabase
+      const { data: existing } = await supabase
+        .from("submissions")
+        .select("*")
+        .eq("submittedBy", club.username)
+        .maybeSingle();
+
+      if (existing) {
+        setData(existing);
+        setDbRecordId(existing.id);
+        setDbSubmittedAt(existing.submittedAt);
+        setDbStatus(existing.status);
+      } else {
+        setData((d) => ({ ...d, clubName: club.clubName }));
+      }
+    } catch (err: any) {
+      setLoginError(err.message || "Invalid username or password.");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem("rotaract-club-session");
+    setLoggedInClub(null);
+    setLoginUsername("");
+    setLoginPassword("");
+    setDbRecordId(null);
+    setDbSubmittedAt(null);
+    setDbStatus(null);
+  }
 
   // Persist
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined") return;
+    if (!hydrated || typeof window === "undefined" || isSingleSectionMode) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, __step: step }));
     } catch {}
-  }, [data, step, hydrated]);
+  }, [data, step, hydrated, isSingleSectionMode]);
+
+  // Jump to specific category section if passed as search param
+  useEffect(() => {
+    if (!hydrated || !loggedInClub || !categoryParam) return;
+    const targetStepId = CATEGORY_STEP_MAP[categoryParam];
+    if (targetStepId) {
+      const idx = FLOW.findIndex((s) => s.id === targetStepId);
+      if (idx !== -1) {
+        setStep(idx);
+      }
+    }
+  }, [hydrated, loggedInClub, categoryParam]);
+
+  async function handleSaveSingleSection() {
+    setSubmitting(true);
+    setSubmitError(null);
+
+    const currentErrors = validateCurrent();
+    setErrors(currentErrors);
+    if (Object.keys(currentErrors).length > 0) {
+      setSubmitting(false);
+      return;
+    }
+
+    const submissionId = dbRecordId || "RDA-" + Date.now().toString(36).toUpperCase();
+    const submission = {
+      ...data,
+      id: submissionId,
+      submittedAt: dbSubmittedAt || new Date().toISOString(),
+      status: dbStatus || "pending",
+      submittedBy: loggedInClub?.username || null,
+    };
+
+    try {
+      const { error } = await supabase.from("submissions").upsert([submission]);
+      if (error) throw error;
+      
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      setDbRecordId(submissionId);
+      setDbSubmittedAt(submission.submittedAt);
+      setDbStatus(submission.status);
+      setSubmittedId(submissionId);
+      setTerminal("thank-you");
+    } catch (err: any) {
+      console.error("Error saving section nomination:", err);
+      setSubmitError(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const current = FLOW[step];
   const progress = Math.round(((step + 1) / FLOW.length) * 100);
@@ -388,12 +556,14 @@ export default function NominationForm() {
   async function submit() {
     setSubmitting(true);
     setSubmitError(null);
-    const id = "RDA-" + Date.now().toString(36).toUpperCase();
+    const id = dbRecordId || "RDA-" + Date.now().toString(36).toUpperCase();
     
     const submission = {
+      ...data,
       id,
-      submittedAt: new Date().toISOString(),
+      submittedAt: dbSubmittedAt || new Date().toISOString(),
       status: "pending",
+      submittedBy: loggedInClub?.username || null,
       clubName: data.clubName,
       parentClub: data.parentClub,
       clubNumber: data.clubNumber,
@@ -440,13 +610,16 @@ export default function NominationForm() {
     };
 
     try {
-      const { error } = await supabase.from("submissions").insert([submission]);
+      const { error } = await supabase.from("submissions").upsert([submission]);
       if (error) {
         throw error;
       }
       if (typeof window !== "undefined") {
         localStorage.removeItem(STORAGE_KEY);
       }
+      setDbRecordId(id);
+      setDbSubmittedAt(submission.submittedAt);
+      setDbStatus(submission.status);
       setSubmittedId(id);
       setTerminal("thank-you");
     } catch (err: any) {
@@ -458,7 +631,11 @@ export default function NominationForm() {
   }
 
   function restart() {
-    setData(EMPTY);
+    if (isSingleSectionMode) {
+      router.push("/");
+      return;
+    }
+    setData({ ...EMPTY, clubName: loggedInClub?.clubName || "" });
     setStep(0);
     setErrors({});
     setTerminal(null);
@@ -474,10 +651,83 @@ export default function NominationForm() {
     return <ThankYouCard id={submittedId || "RDA-XXXX"} onRestart={restart} />;
   }
 
+  if (!loggedInClub) {
+    return (
+      <div className="max-w-md mx-auto glass-strong rounded-3xl p-8 sm:p-10 relative overflow-hidden grain">
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[80%] h-72 star-burst blur-3xl opacity-50" />
+        <div className="relative z-10">
+          <div className="text-[11px] uppercase tracking-[0.25em] text-[#d6ba73] mb-2">
+            Club Authentication Gate
+          </div>
+          <h2 className="font-display text-3xl sm:text-4xl text-[rgba(244,234,213,0.95)]">
+            Ignite Possibilities
+          </h2>
+          <p className="mt-2 text-sm text-[rgba(244,234,213,0.6)] leading-relaxed">
+            Please log in with your secure club credentials to access the nomination flow. Only authorized clubs can submit.
+          </p>
+          
+          <form onSubmit={handleLogin} className="mt-6 grid gap-4">
+            <div>
+              <label className="input-label">Username</label>
+              <input
+                className="input-field"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="e.g. mssw.rotaract"
+                required
+                disabled={loggingIn}
+              />
+            </div>
+            <div>
+              <label className="input-label">Password</label>
+              <input
+                type="password"
+                className="input-field"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                disabled={loggingIn}
+              />
+            </div>
+            
+            {loginError && (
+              <div className="text-xs text-[#f6b8a3] mt-1 font-semibold">
+                {loginError}
+              </div>
+            )}
+            
+            <button
+              type="submit"
+              disabled={loggingIn}
+              className="btn-gold mt-2 px-6 py-3 rounded-full text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {loggingIn ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                "Authenticate & Continue →"
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   /* ---------- Active form ---------- */
   return (
     <div className="glass-strong rounded-3xl overflow-hidden">
-      <ProgressRail step={step} progress={progress} group={current.group} />
+      <ProgressRail 
+        step={step} 
+        progress={progress} 
+        group={current.group} 
+        clubName={loggedInClub?.clubName || ""} 
+        onLogout={handleLogout} 
+        isSingleSectionMode={isSingleSectionMode}
+      />
 
       <div className="p-6 sm:p-10">
         <SectionHeading group={current.group} step={step} title={current.title} subtitle={current.subtitle} />
@@ -542,40 +792,73 @@ export default function NominationForm() {
           </div>
         )}
 
-        <div className="mt-10 pt-6 border-t border-[rgba(214,186,115,0.16)] flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-[rgba(244,234,213,0.5)]">
-            Auto-saved · Section {step + 1} of {FLOW.length}
-          </div>
-          <div className="flex items-center gap-3 justify-end">
-            {step > 0 && (
+        {isSingleSectionMode ? (
+          <div className="mt-10 pt-6 border-t border-[rgba(214,186,115,0.16)] flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[rgba(244,234,213,0.5)]">
+              Single Section Edit Mode · Auto-saving disabled
+            </div>
+            <div className="flex items-center gap-3 justify-end">
               <button
                 type="button"
-                onClick={goBack}
+                onClick={() => router.push("/")}
                 disabled={submitting}
-                className="btn-ghost px-6 py-2.5 rounded-full text-sm disabled:opacity-50"
+                className="btn-ghost px-6 py-2.5 rounded-full text-sm disabled:opacity-50 cursor-pointer"
               >
-                ← Back
+                Cancel
               </button>
-            )}
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={submitting}
-              className="btn-gold px-7 py-2.5 rounded-full text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
-            >
-              {submitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  Submitting...
-                </>
-              ) : step === FLOW.length - 1 ? (
-                "Submit Nomination"
-              ) : (
-                "Continue →"
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={handleSaveSingleSection}
+                disabled={submitting}
+                className="btn-gold px-7 py-2.5 rounded-full text-sm font-semibold disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+              >
+                {submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mt-10 pt-6 border-t border-[rgba(214,186,115,0.16)] flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[rgba(244,234,213,0.5)]">
+              Auto-saved · Section {step + 1} of {FLOW.length}
+            </div>
+            <div className="flex items-center gap-3 justify-end">
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={submitting}
+                  className="btn-ghost px-6 py-2.5 rounded-full text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  ← Back
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={submitting}
+                className="btn-gold px-7 py-2.5 rounded-full text-sm font-semibold disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+              >
+                {submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Submitting...
+                  </>
+                ) : step === FLOW.length - 1 ? (
+                  "Submit Nomination"
+                ) : (
+                  "Continue →"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -585,22 +868,48 @@ export default function NominationForm() {
    Progress + heading
    ========================================================= */
 
-function ProgressRail({ step, progress, group }: { step: number; progress: number; group: string }) {
+function ProgressRail({ 
+  step, 
+  progress, 
+  group, 
+  clubName, 
+  onLogout,
+  isSingleSectionMode = false
+}: { 
+  step: number; 
+  progress: number; 
+  group: string; 
+  clubName: string;
+  onLogout: () => void;
+  isSingleSectionMode?: boolean;
+}) {
   return (
     <div className="relative bg-[rgba(10,13,24,0.6)] border-b border-[rgba(214,186,115,0.18)] px-6 sm:px-10 py-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-[rgba(244,234,213,0.65)]">
-          <span className="chip">{group}</span>
-          <span>Section {step + 1} / {FLOW.length}</span>
+          <span className="chip">{isSingleSectionMode ? "Category Nomination" : group}</span>
+          {!isSingleSectionMode && <span>Section {step + 1} / {FLOW.length}</span>}
         </div>
-        <div className="text-[11px] uppercase tracking-[0.22em] text-[#d6ba73]">{progress}%</div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-[rgba(244,234,213,0.5)] italic truncate max-w-[150px] sm:max-w-xs">{clubName}</span>
+          <button 
+            type="button" 
+            onClick={onLogout} 
+            className="text-[#f6b8a3] hover:text-[#ff968c] transition text-[10px] uppercase tracking-wider font-semibold border border-[rgba(255,150,140,0.3)] bg-[rgba(255,150,140,0.04)] px-2.5 py-1 rounded-full cursor-pointer"
+          >
+            Sign Out
+          </button>
+          {!isSingleSectionMode && <span className="text-[11px] uppercase tracking-[0.22em] text-[#d6ba73]">{progress}%</span>}
+        </div>
       </div>
-      <div className="mt-3 h-px bg-[rgba(214,186,115,0.18)] overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-[#e8d49a] via-[#d6ba73] to-[#a8893e] transition-all duration-500"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      {!isSingleSectionMode && (
+        <div className="mt-3 h-px bg-[rgba(214,186,115,0.18)] overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-[#e8d49a] via-[#d6ba73] to-[#a8893e] transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -812,11 +1121,11 @@ function IdentitySection({
 }) {
   return (
     <div className="grid gap-5">
-      <Field label="Club Name" hint="Prefix 'Rotaract Club of'" error={errors.clubName} required>
+      <Field label="Club Name" hint="Your authenticated club name is locked for safety." error={errors.clubName} required>
         <input
-          className="input-field"
+          className="input-field opacity-75 cursor-not-allowed select-none bg-[rgba(214,186,115,0.04)] font-semibold"
           value={data.clubName}
-          onChange={(e) => update("clubName", e.target.value)}
+          readOnly
           placeholder="Rotaract Club of ____"
         />
       </Field>
