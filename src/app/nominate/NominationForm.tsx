@@ -98,6 +98,8 @@ type FormState = {
   projects: Record<ProjectKey, ProjectEntry>;
 
   // Section 18 — Club Award
+  clubStrength: string;
+  avgMeetingAttendance: string;
   clubSelfEval: string;
   clubEvents: string[];
   clubEventCounts: Record<string, string>;
@@ -219,6 +221,8 @@ const EMPTY: FormState = {
 
   projects: emptyProjects(),
 
+  clubStrength: "",
+  avgMeetingAttendance: "",
   clubSelfEval: "",
   clubEvents: [],
   clubEventCounts: {},
@@ -550,6 +554,8 @@ export default function NominationForm() {
       }
     }
     if (id === "club-award") {
+      if (!data.clubStrength.trim()) e.clubStrength = "Required.";
+      if (!data.avgMeetingAttendance.trim()) e.avgMeetingAttendance = "Required.";
       if (!data.clubSelfEval.trim()) e.clubSelfEval = "Required.";
       if (!data.drcMeetingsAttended) e.drcMeetingsAttended = "Required.";
       if (!data.closedDoorMeetingsAttended.trim()) e.closedDoorMeetingsAttended = "Required.";
@@ -2033,6 +2039,40 @@ function ClubAwardSection({
           onChange={(v) => update("clubRotary", v)}
         />
       </Field>
+
+      <div className="glass rounded-2xl p-5 grid sm:grid-cols-2 gap-5">
+        <div className="col-span-full text-[10px] uppercase tracking-[0.22em] text-[#d6ba73]">
+          Club Strength &amp; Attendance
+        </div>
+        <Field
+          label="Total Number of Members (Club Strength)"
+          error={errors.clubStrength}
+          hint="Active members as of the current rotary year."
+          required
+        >
+          <input
+            type="number"
+            className="input-field"
+            value={data.clubStrength}
+            onChange={(e) => update("clubStrength", e.target.value)}
+            placeholder="e.g. 45"
+          />
+        </Field>
+        <Field
+          label="Average Meeting Attendance"
+          error={errors.avgMeetingAttendance}
+          hint="Average number of members who attend each club meeting."
+          required
+        >
+          <input
+            type="number"
+            className="input-field"
+            value={data.avgMeetingAttendance}
+            onChange={(e) => update("avgMeetingAttendance", e.target.value)}
+            placeholder="e.g. 30"
+          />
+        </Field>
+      </div>
 
       <div className="grid sm:grid-cols-2 gap-5">
         <Field label="Attended any other district RIDE" required>

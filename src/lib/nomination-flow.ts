@@ -152,6 +152,7 @@ export const DISTRICT_INITIATIVES = [
   "Shores of Tomorrow (Beach Clean-up)",
   "Insight Connect",
   "Namma Ooru Namma Chennai – RIDE",
+  "Level Up – District Job Fair",
 ];
 
 export const ROTARY_INITIATIVES = [
