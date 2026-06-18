@@ -33,24 +33,24 @@ function Hero() {
       <div className="relative z-10 mx-auto max-w-7xl px-5 sm:px-8 text-center">
         <div className="inline-flex items-center gap-2 chip mb-8 animate-rise">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#d6ba73] animate-pulse-gold" />
-          Theme of the Year · Ignite Possibilities
+          District Rotaract Council Presents
         </div>
 
         <h1
           className="font-display text-[44px] sm:text-[68px] md:text-[88px] leading-[1.02] tracking-tight animate-rise"
           style={{ animationDelay: "0.05s" }}
         >
-          <span className="block text-[rgba(244,234,213,0.92)]">Ignite</span>
-          <span className="block gold-text">Possibilities</span>
+          <span className="block gold-text">IGNUS</span>
+          <span className="block text-[rgba(244,234,213,0.92)] text-[28px] sm:text-[40px] md:text-[52px] mt-2">Annual District Rotaract Awards</span>
         </h1>
 
         <p
           className="mt-7 mx-auto max-w-2xl text-[15px] sm:text-base text-[rgba(244,234,213,0.7)] leading-relaxed animate-rise"
           style={{ animationDelay: "0.15s" }}
         >
-          The Rotaract District Awards 2025-26 celebrate the projects, presidents, and clubs that embody 
-          our theme of the year. Submit your nomination, share their stories of outstanding impact, 
-          and let us ignite the endless possibilities of service.
+          IGNUS — the Annual District Rotaract Awards 2025-26 — celebrates the projects, presidents,
+          and clubs that delivered outstanding impact across every avenue of service. Submit your
+          nomination and let the district recognise the work that truly made a difference.
         </p>
 
         <div
@@ -78,6 +78,8 @@ function Hero() {
           <span>Submissions close · 21 Jun 2026</span>
           <span className="hidden sm:inline">·</span>
           <span>Ceremony · 27 Jun 2026</span>
+          <span className="hidden sm:inline">·</span>
+          <span>Venue · Gyan Bhavan, AM Jain</span>
         </div>
 
         <TrophyMark />
@@ -154,7 +156,7 @@ function Marquee() {
 
 function Stats() {
   const fixedStats = [
-    { v: "18", l: "Award Categories" },
+    { v: "25+", l: "Award Categories" },
     { v: "27", l: "Form Sections" },
     { v: "1 night", l: "Of unforgettable recognition" },
   ];
@@ -191,7 +193,7 @@ function About() {
               <span className="gold-text">annual honour.</span>
             </>
           }
-          subtitle="The Rotaract District Awards 2025-26 are the official recognition for the clubs, projects, presidents and members who carried the spirit of Service Above Self through the rotary year. Every entry is reviewed by an independent jury — your work is the only currency that matters here."
+          subtitle="IGNUS — the Annual District Rotaract Awards 2025-26 — is the official recognition for the clubs, projects, presidents and members who carried the spirit of Service Above Self through the rotary year. Every entry is reviewed by an independent jury — your work is the only currency that matters here."
         />
 
         <div className="mt-16 grid md:grid-cols-3 gap-5">
@@ -212,10 +214,11 @@ function About() {
           />
         </div>
 
-        <div className="mt-12 glass rounded-3xl p-6 sm:p-8 grid sm:grid-cols-3 gap-5 sm:gap-8">
+        <div className="mt-12 glass rounded-3xl p-6 sm:p-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-8">
           <KeyDate icon="scroll" label="Submissions open" value="Now" />
           <KeyDate icon="medal" label="Submissions close" value="21 Jun 2026" />
           <KeyDate icon="trophy" label="Awards ceremony" value="27 Jun 2026" />
+          <KeyDate icon="medal" label="Venue" value="Gyan Bhavan, AM Jain" />
         </div>
       </div>
     </section>
@@ -275,10 +278,10 @@ function Categories() {
           eyebrow="The Honours"
           title={
             <>
-              Eighteen honours. <span className="gold-text">One stage.</span>
+              25+ honours. <span className="gold-text">One stage.</span>
             </>
           }
-          subtitle="From the highest Best Rotaract Club crown to individual recognition for the people who made it all possible — every award is a tribute to a different shade of service."
+          subtitle="From the Rotaract Club of the Year crown to individual recognition for the people who made it all possible — every award is a tribute to a different shade of service."
         />
 
         {CATEGORY_GROUPS.map((g) => {

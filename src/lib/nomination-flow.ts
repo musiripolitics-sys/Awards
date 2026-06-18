@@ -19,54 +19,72 @@ export const PROJECT_SECTIONS: {
   title: string;
   avenue: string;
   description: string;
+  note?: string;
+  noteType?: "warning" | "info";
 }[] = [
   {
     key: "club-service-1",
     title: "Club Service Project 1",
     avenue: "Club Service",
     description: "A project that strengthened club fellowship, governance or member engagement.",
+    note: "Must have been conducted after 7 December 2025. Projects before this date are not eligible.",
+    noteType: "warning",
   },
   {
     key: "club-service-2",
     title: "Club Service Project 2",
     avenue: "Club Service",
-    description: "Your club's second-best club service project from the year.",
+    description: "Your second Club Service project from the year.",
+    note: "Secondary nomination — any time in the rotary year 2025-26.",
+    noteType: "info",
   },
   {
     key: "professional-1",
     title: "Professional Service Project 1",
     avenue: "Professional",
     description: "A project that empowered Rotaractors with skills, careers or professional growth.",
+    note: "Must have been conducted after 7 December 2025. Projects before this date are not eligible.",
+    noteType: "warning",
   },
   {
     key: "professional-2",
     title: "Professional Service Project 2",
     avenue: "Professional",
-    description: "Your club's second-best professional development project.",
+    description: "Your second professional development project.",
+    note: "Can be from any time during the rotary year 2025-26, no date restriction.",
+    noteType: "info",
   },
   {
     key: "community-1",
     title: "Community Service Project 1",
     avenue: "Community",
     description: "A community-facing project that delivered transformational impact.",
+    note: "Must have been conducted after 7 December 2025. Projects before this date are not eligible.",
+    noteType: "warning",
   },
   {
     key: "community-2",
     title: "Community Service Project 2",
     avenue: "Community",
-    description: "Your club's second-best community service project.",
+    description: "Your second community service project from the year.",
+    note: "Secondary nomination — any time in the rotary year 2025-26.",
+    noteType: "info",
   },
   {
     key: "international-1",
     title: "International Service Project 1",
     avenue: "International",
     description: "A cross-border collaboration promoting peace and understanding.",
+    note: "Must have been conducted after 7 December 2025. Projects before this date are not eligible.",
+    noteType: "warning",
   },
   {
     key: "international-2",
     title: "International Service Project 2",
     avenue: "International",
-    description: "Your club's second-best international service project.",
+    description: "Your second international service project from the year.",
+    note: "Secondary nomination — any time in the rotary year 2025-26.",
+    noteType: "info",
   },
   {
     key: "ongoing",
@@ -154,13 +172,11 @@ export const FLOW: { id: string; group: string; title: string; subtitle: string 
   })),
   { id: "club-award", group: "Club Awards", title: "Club Award Nomination", subtitle: "Your club's year, in numbers and words." },
   { id: "social-media", group: "Club Awards", title: "Social Media Handling", subtitle: "How the club showed up online." },
-  { id: "happy-moment", group: "Club Awards", title: "Happy Moment Award", subtitle: "A practice that built joy and belonging." },
-  { id: "best-practice", group: "Club Awards", title: "Best Practice Award", subtitle: "An operational practice that lifted quality." },
+  { id: "best-practice", group: "Club Awards", title: "Practice Award", subtitle: "An operational practice that lifted quality." },
   { id: "president", group: "Officer Awards", title: "President Self-Evaluation", subtitle: "To be filled by the Club President." },
   { id: "secretary", group: "Officer Awards", title: "Secretary Self-Evaluation", subtitle: "To be filled by the Club Secretary." },
   { id: "star-of-rotaract", group: "Member Recognition", title: "Star of Rotaract", subtitle: "Nominate two members for individual recognition." },
-  { id: "favorite-do", group: "Member Recognition", title: "Favorite District Official", subtitle: "Nominate three district officials your club loved working with." },
-  { id: "declaration", group: "Submit", title: "Declaration & Submit", subtitle: "Review, sign, and send it to the jury." },
+  { id: "declaration", group: "Submit", title: "Declaration & Save", subtitle: "Review, sign, and save it to the jury." },
 ];
 
 export type FlowEntry = (typeof FLOW)[number];

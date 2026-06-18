@@ -6,7 +6,6 @@ import { useState } from "react";
 const NAV = [
   { href: "/#categories", label: "Categories" },
   { href: "/#process", label: "Process" },
-  { href: "/admin", label: "Admin" },
 ];
 
 export default function SiteHeader() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   FLOW,
@@ -13,6 +13,21 @@ import {
 } from "@/lib/nomination-flow";
 import { supabase } from "@/lib/supabase";
 
+// ─── Google Apps Script upload proxy ─────────────────────────────────────────
+// Runs as the Google account that deployed it — no service-account quota issues.
+const GOOGLE_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbzWxR2GsZfRzQNYZs4KsLUAX41luOZluGa-K-GQw89xMevywIA468-nr-0lZPsDivEK/exec";
+
+/** Convert a File to a raw base64 string (no data-URL prefix). */
+function getBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = (err) => reject(err);
+  });
+}
+
 /* ---------------- Form state types ---------------- */
 
 type YesNo = "yes" | "no" | "";
@@ -20,6 +35,7 @@ type YesNo = "yes" | "no" | "";
 type ProjectEntry = {
   nominate: boolean;
   name: string;
+  coHostClubs: string;
   startDate: string;
   endDate: string;
   beneficiaries: string;
@@ -47,6 +63,9 @@ type OfficerData = {
   trfContribution: string;
   eventsHostedCoChair: string;
   photosLink: string;
+  professionalImage: string;
+  challengeThisYear: string;
+  top3DO: [string, string, string];
 };
 
 type StarNominee = { name: string; eval: string };
@@ -57,12 +76,19 @@ type FormState = {
   parentClub: string;
   clubNumber: string;
   clubType: "college" | "community" | "";
+  clubLogo: string;
 
   // Section 2/3 — Eligibility
   riDuesPaid: YesNo;
+  riDuesProof: string;
   districtDuesPaid: YesNo;
+  districtDuesProof: string;
   bankAccountActive: YesNo;
   bankProofName: string;
+  accountCreatedMailProof: string;
+  colourGalataHosted: YesNo;
+  colourGalataContribution: string;
+  colourGalataReason: string;
 
   // Sections 4-17 — Projects
   projects: Record<ProjectKey, ProjectEntry>;
@@ -70,6 +96,7 @@ type FormState = {
   // Section 18 — Club Award
   clubSelfEval: string;
   clubEvents: string[];
+  clubEventCounts: Record<string, string>;
   clubInitiatives: string[];
   clubRotary: string[];
   clubOtherRIDE: string;
@@ -79,7 +106,8 @@ type FormState = {
   drcMeetingsHosted: string;
   clubTRFContribution: string;
   districtEventsHostedByClub: string;
-  twinClubAgreement: string;
+  twinClubAgreement: YesNo;
+  twinClubAgreementProof: string;
   districtOfficialsFromClub: string;
   collaredMeetings: string;
   clubPhotosLink: string;
@@ -88,13 +116,7 @@ type FormState = {
   socialMediaDesc: string;
   socialMediaLinks: string;
 
-  // Section 20 — Happy Moment
-  happyMomentDesc: string;
-  happyMomentPic1: string;
-  happyMomentPic2: string;
-  happyMomentPic3: string;
-
-  // Section 21 — Best Practice
+  // Section 20 — Best Practice
   bestPracticeDesc: string;
   bestPracticePic1: string;
   bestPracticePic2: string;
@@ -109,10 +131,7 @@ type FormState = {
   // Section 24 — Star of Rotaract
   starNominees: [StarNominee, StarNominee];
 
-  // Section 25 — Favorite District Official
-  favoriteDONominees: [StarNominee, StarNominee, StarNominee];
-
-  // Section 26 — Declaration
+  // Section 25 — Declaration
   declarationName: string;
   declarationRole: string;
   declarationDate: string;
@@ -123,6 +142,7 @@ type FormState = {
 const EMPTY_PROJECT: ProjectEntry = {
   nominate: false,
   name: "",
+  coHostClubs: "",
   startDate: "",
   endDate: "",
   beneficiaries: "",
@@ -150,6 +170,9 @@ const EMPTY_OFFICER: OfficerData = {
   trfContribution: "",
   eventsHostedCoChair: "",
   photosLink: "",
+  professionalImage: "",
+  challengeThisYear: "",
+  top3DO: ["", "", ""],
 };
 
 function emptyProjects(): Record<ProjectKey, ProjectEntry> {
@@ -165,16 +188,24 @@ const EMPTY: FormState = {
   parentClub: "",
   clubNumber: "",
   clubType: "",
+  clubLogo: "",
 
   riDuesPaid: "",
+  riDuesProof: "",
   districtDuesPaid: "",
+  districtDuesProof: "",
   bankAccountActive: "",
   bankProofName: "",
+  accountCreatedMailProof: "",
+  colourGalataHosted: "",
+  colourGalataContribution: "",
+  colourGalataReason: "",
 
   projects: emptyProjects(),
 
   clubSelfEval: "",
   clubEvents: [],
+  clubEventCounts: {},
   clubInitiatives: [],
   clubRotary: [],
   clubOtherRIDE: "",
@@ -185,17 +216,13 @@ const EMPTY: FormState = {
   clubTRFContribution: "",
   districtEventsHostedByClub: "",
   twinClubAgreement: "",
+  twinClubAgreementProof: "",
   districtOfficialsFromClub: "",
   collaredMeetings: "",
   clubPhotosLink: "",
 
   socialMediaDesc: "",
   socialMediaLinks: "",
-
-  happyMomentDesc: "",
-  happyMomentPic1: "",
-  happyMomentPic2: "",
-  happyMomentPic3: "",
 
   bestPracticeDesc: "",
   bestPracticePic1: "",
@@ -206,12 +233,6 @@ const EMPTY: FormState = {
   secretary: { ...EMPTY_OFFICER },
 
   starNominees: [
-    { name: "", eval: "" },
-    { name: "", eval: "" },
-  ],
-
-  favoriteDONominees: [
-    { name: "", eval: "" },
     { name: "", eval: "" },
     { name: "", eval: "" },
   ],
@@ -240,12 +261,10 @@ const CATEGORY_STEP_MAP: Record<string, string> = {
   "best-innovative-project": "project:innovative",
   "best-rotaract-club": "club-award",
   "best-social-media": "social-media",
-  "happy-moment-award": "happy-moment",
   "best-practice-award": "best-practice",
   "president-of-the-year": "president",
   "secretary-of-the-year": "secretary",
-  "star-of-rotaract": "star-of-rotaract",
-  "favorite-district-official": "favorite-do"
+  "star-of-rotaract": "star-of-rotaract"
 };
 
 export default function NominationForm() {
@@ -270,6 +289,7 @@ export default function NominationForm() {
   const [dbRecordId, setDbRecordId] = useState<string | null>(null);
   const [dbSubmittedAt, setDbSubmittedAt] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Hydrate
   useEffect(() => {
@@ -278,9 +298,10 @@ export default function NominationForm() {
     async function initSession() {
       try {
         const session = sessionStorage.getItem("rotaract-club-session");
+        let sessionClub = null;
         if (session) {
           const parsedSession = JSON.parse(session);
-          setLoggedInClub(parsedSession);
+          sessionClub = parsedSession;
           
           // Fetch existing submission from Supabase
           const { data: existing, error } = await supabase
@@ -293,6 +314,7 @@ export default function NominationForm() {
             setDbRecordId(existing.id);
             setDbSubmittedAt(existing.submittedAt);
             setDbStatus(existing.status);
+            setEditMode(true);
           } else {
             setData((d) => ({ ...d, clubName: parsedSession.clubName }));
           }
@@ -300,9 +322,13 @@ export default function NominationForm() {
         
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
-          const parsed = JSON.parse(raw);
-          setData((d) => ({ ...d, ...parsed, projects: { ...d.projects, ...(parsed.projects || {}) } }));
-          if (typeof parsed.__step === "number") setStep(parsed.__step);
+          const { __step, ...rest } = JSON.parse(raw);
+          setData((d) => ({ ...d, ...rest, projects: { ...d.projects, ...(rest.projects || {}) } }));
+          if (typeof __step === "number") setStep(__step);
+        }
+
+        if (sessionClub) {
+          setLoggedInClub(sessionClub);
         }
       } catch (err) {
         console.error("Session initialization failed:", err);
@@ -331,10 +357,8 @@ export default function NominationForm() {
       }
 
       const sessionObj = { username: club.username, clubName: club.clubName };
-      sessionStorage.setItem("rotaract-club-session", JSON.stringify(sessionObj));
-      setLoggedInClub(sessionObj);
       
-      // Fetch existing submission from Supabase
+      // Fetch existing submission from Supabase first
       const { data: existing } = await supabase
         .from("submissions")
         .select("*")
@@ -346,9 +370,13 @@ export default function NominationForm() {
         setDbRecordId(existing.id);
         setDbSubmittedAt(existing.submittedAt);
         setDbStatus(existing.status);
+        setEditMode(true);
       } else {
         setData((d) => ({ ...d, clubName: club.clubName }));
       }
+
+      sessionStorage.setItem("rotaract-club-session", JSON.stringify(sessionObj));
+      setLoggedInClub(sessionObj);
     } catch (err: any) {
       setLoginError(err.message || "Invalid username or password.");
     } finally {
@@ -398,12 +426,14 @@ export default function NominationForm() {
     }
 
     const submissionId = dbRecordId || "RDA-" + Date.now().toString(36).toUpperCase();
+    const { __step, ...cleanData } = data as any;
     const submission = {
-      ...data,
+      ...cleanData,
       id: submissionId,
       submittedAt: dbSubmittedAt || new Date().toISOString(),
       status: dbStatus || "pending",
       submittedBy: loggedInClub?.username || null,
+      happyMomentDesc: "",
     };
 
     try {
@@ -449,14 +479,26 @@ export default function NominationForm() {
       if (!data.parentClub.trim()) e.parentClub = "Required.";
       if (!data.clubNumber.trim()) e.clubNumber = "Required.";
       if (!data.clubType) e.clubType = "Pick your club type.";
+      if (!data.clubLogo.trim()) e.clubLogo = "Please upload your club logo (PNG).";
     }
     if (id === "docs") {
       if (!data.riDuesPaid) e.riDuesPaid = "Required.";
+      if (data.riDuesPaid === "yes" && !data.riDuesProof.trim())
+        e.riDuesProof = "Please upload the RI dues payment proof.";
       if (!data.districtDuesPaid) e.districtDuesPaid = "Required.";
+      if (data.districtDuesPaid === "yes" && !data.districtDuesProof.trim())
+        e.districtDuesProof = "Please upload the District dues payment proof.";
       if (data.clubType === "community") {
         if (!data.bankAccountActive) e.bankAccountActive = "Required.";
         if (data.bankAccountActive === "yes" && !data.bankProofName.trim())
-          e.bankProofName = "Upload the proof.";
+          e.bankProofName = "Upload the bank proof.";
+        if (!data.accountCreatedMailProof.trim())
+          e.accountCreatedMailProof = "Please upload the account created mail (PDF).";
+        if (!data.colourGalataHosted) e.colourGalataHosted = "Required.";
+        if (data.colourGalataHosted === "yes" && !data.colourGalataContribution.trim())
+          e.colourGalataContribution = "Please mention how much your club contributed.";
+        if (data.colourGalataHosted === "no" && !data.colourGalataReason.trim())
+          e.colourGalataReason = "Please provide the reason for not participating.";
       }
     }
     if (id.startsWith("project:")) {
@@ -464,8 +506,19 @@ export default function NominationForm() {
       const p = data.projects[key];
       if (p.nominate) {
         if (!p.name.trim()) e.projectName = "Project name is required.";
-        if (!p.startDate) e.startDate = "Start date is required.";
-        if (!p.endDate) e.endDate = "End date is required.";
+        if (key === "joint" && !p.coHostClubs.trim()) e.coHostClubs = "List at least one co-host club.";
+        const PRIMARY_PROJECT_KEYS: ProjectKey[] = ["club-service-1", "professional-1", "community-1", "international-1"];
+        const DATE_CUTOFF = "2025-12-07";
+        if (!p.startDate) {
+          e.startDate = "Start date is required.";
+        } else if (PRIMARY_PROJECT_KEYS.includes(key) && p.startDate < DATE_CUTOFF) {
+          e.startDate = "This project must have been conducted after 7 December 2025.";
+        }
+        if (!p.endDate) {
+          e.endDate = "End date is required.";
+        } else if (PRIMARY_PROJECT_KEYS.includes(key) && p.endDate < DATE_CUTOFF) {
+          e.endDate = "This project must have ended on or after 7 December 2025.";
+        }
         if (!p.beneficiaries.trim()) e.beneficiaries = "Required.";
         if (!p.purpose.trim()) e.purpose = "Required.";
         if (!p.overview.trim()) e.overview = "Required.";
@@ -475,17 +528,17 @@ export default function NominationForm() {
     }
     if (id === "club-award") {
       if (!data.clubSelfEval.trim()) e.clubSelfEval = "Required.";
-      if (!data.drcMeetingsAttended.trim()) e.drcMeetingsAttended = "Required.";
+      if (!data.drcMeetingsAttended) e.drcMeetingsAttended = "Required.";
       if (!data.closedDoorMeetingsAttended.trim()) e.closedDoorMeetingsAttended = "Required.";
       if (!data.clubTRFContribution.trim()) e.clubTRFContribution = "Required.";
+      if (!data.twinClubAgreement) e.twinClubAgreement = "Required.";
+      if (data.twinClubAgreement === "yes" && !data.twinClubAgreementProof.trim())
+        e.twinClubAgreementProof = "Please upload the signed agreement (PDF).";
       if (!data.clubPhotosLink.trim()) e.clubPhotosLink = "Drive link is required.";
     }
     if (id === "social-media") {
       if (!data.socialMediaDesc.trim()) e.socialMediaDesc = "Required.";
       if (!data.socialMediaLinks.trim()) e.socialMediaLinks = "Required.";
-    }
-    if (id === "happy-moment") {
-      if (!data.happyMomentDesc.trim()) e.happyMomentDesc = "Required.";
     }
     if (id === "best-practice") {
       if (!data.bestPracticeDesc.trim()) e.bestPracticeDesc = "Required.";
@@ -496,21 +549,17 @@ export default function NominationForm() {
       if (!o.selfEval.trim()) e.selfEval = "Required.";
       if (!o.keyContrib.trim()) e.keyContrib = "Required.";
       if (!o.consistency.trim()) e.consistency = "Required.";
+      if (!o.challengeThisYear.trim()) e.challengeThisYear = "Required.";
       if (!o.drcMeetings.trim()) e.drcMeetings = "Required.";
       if (!o.closedDoorMeetings.trim()) e.closedDoorMeetings = "Required.";
       if (!o.trfContribution.trim()) e.trfContribution = "Required.";
       if (!o.photosLink.trim()) e.photosLink = "Drive link is required.";
+      if (!o.top3DO[0].trim()) e.top3DO = "Nominate at least one District Official.";
     }
     if (id === "star-of-rotaract") {
       data.starNominees.forEach((n, i) => {
         if (!n.name.trim()) e[`star-name-${i}`] = "Required.";
         if (!n.eval.trim()) e[`star-eval-${i}`] = "Required.";
-      });
-    }
-    if (id === "favorite-do") {
-      data.favoriteDONominees.forEach((n, i) => {
-        if (!n.name.trim()) e[`do-name-${i}`] = "Required.";
-        if (!n.eval.trim()) e[`do-eval-${i}`] = "Required.";
       });
     }
     if (id === "declaration") {
@@ -558,8 +607,9 @@ export default function NominationForm() {
     setSubmitError(null);
     const id = dbRecordId || "RDA-" + Date.now().toString(36).toUpperCase();
     
+    const { __step, ...cleanData } = data as any;
     const submission = {
-      ...data,
+      ...cleanData,
       id,
       submittedAt: dbSubmittedAt || new Date().toISOString(),
       status: "pending",
@@ -568,13 +618,21 @@ export default function NominationForm() {
       parentClub: data.parentClub,
       clubNumber: data.clubNumber,
       clubType: data.clubType,
+      clubLogo: data.clubLogo || null,
       riDuesPaid: data.riDuesPaid,
+      riDuesProof: data.riDuesProof || null,
       districtDuesPaid: data.districtDuesPaid,
+      districtDuesProof: data.districtDuesProof || null,
       bankAccountActive: data.bankAccountActive || null,
       bankProofName: data.bankProofName || null,
+      accountCreatedMailProof: data.accountCreatedMailProof || null,
+      colourGalataHosted: data.colourGalataHosted || null,
+      colourGalataContribution: data.colourGalataContribution || null,
+      colourGalataReason: data.colourGalataReason || null,
       projects: data.projects,
       clubSelfEval: data.clubSelfEval,
       clubEvents: data.clubEvents,
+      clubEventCounts: data.clubEventCounts,
       clubInitiatives: data.clubInitiatives,
       clubRotary: data.clubRotary,
       clubOtherRIDE: data.clubOtherRIDE || null,
@@ -585,15 +643,12 @@ export default function NominationForm() {
       clubTRFContribution: data.clubTRFContribution || null,
       districtEventsHostedByClub: data.districtEventsHostedByClub || null,
       twinClubAgreement: data.twinClubAgreement || null,
+      twinClubAgreementProof: data.twinClubAgreementProof || null,
       districtOfficialsFromClub: data.districtOfficialsFromClub || null,
       collaredMeetings: data.collaredMeetings || null,
       clubPhotosLink: data.clubPhotosLink,
       socialMediaDesc: data.socialMediaDesc,
       socialMediaLinks: data.socialMediaLinks,
-      happyMomentDesc: data.happyMomentDesc,
-      happyMomentPic1: data.happyMomentPic1 || null,
-      happyMomentPic2: data.happyMomentPic2 || null,
-      happyMomentPic3: data.happyMomentPic3 || null,
       bestPracticeDesc: data.bestPracticeDesc,
       bestPracticePic1: data.bestPracticePic1 || null,
       bestPracticePic2: data.bestPracticePic2 || null,
@@ -601,12 +656,12 @@ export default function NominationForm() {
       president: data.president,
       secretary: data.secretary,
       starNominees: data.starNominees,
-      favoriteDONominees: data.favoriteDONominees,
       declarationName: data.declarationName,
       declarationRole: data.declarationRole,
       declarationDate: data.declarationDate,
       declared: data.declared,
       consentContact: data.consentContact,
+      happyMomentDesc: "",
     };
 
     try {
@@ -621,6 +676,7 @@ export default function NominationForm() {
       setDbSubmittedAt(submission.submittedAt);
       setDbStatus(submission.status);
       setSubmittedId(id);
+      setEditMode(true);
       setTerminal("thank-you");
     } catch (err: any) {
       console.error("Error submitting nomination to Supabase:", err);
@@ -640,7 +696,15 @@ export default function NominationForm() {
     setErrors({});
     setTerminal(null);
     setSubmittedId(null);
+    setEditMode(false);
     if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function enterEditMode() {
+    setTerminal(null);
+    setStep(0);
+    setErrors({});
+    setEditMode(true);
   }
 
   /* ---------- Terminal screens ---------- */
@@ -648,7 +712,7 @@ export default function NominationForm() {
     return <IneligibilityCard onReset={() => setTerminal(null)} />;
   }
   if (terminal === "thank-you") {
-    return <ThankYouCard id={submittedId || "RDA-XXXX"} onRestart={restart} />;
+    return <ThankYouCard id={submittedId || "RDA-XXXX"} onRestart={restart} onEdit={enterEditMode} />;
   }
 
   if (!loggedInClub) {
@@ -660,7 +724,7 @@ export default function NominationForm() {
             Club Authentication Gate
           </div>
           <h2 className="font-display text-3xl sm:text-4xl text-[rgba(244,234,213,0.95)]">
-            Ignite Possibilities
+            District Awards 2025-26
           </h2>
           <p className="mt-2 text-sm text-[rgba(244,234,213,0.6)] leading-relaxed">
             Please log in with your secure club credentials to access the nomination flow. Only authorized clubs can submit.
@@ -720,14 +784,22 @@ export default function NominationForm() {
   /* ---------- Active form ---------- */
   return (
     <div className="glass-strong rounded-3xl overflow-hidden">
-      <ProgressRail 
-        step={step} 
-        progress={progress} 
-        group={current.group} 
-        clubName={loggedInClub?.clubName || ""} 
-        onLogout={handleLogout} 
+      <ProgressRail
+        step={step}
+        progress={progress}
+        group={current.group}
+        clubName={loggedInClub?.clubName || ""}
+        onLogout={handleLogout}
         isSingleSectionMode={isSingleSectionMode}
       />
+
+      {editMode && (
+        <SectionNavigator
+          currentStep={step}
+          data={data}
+          onJump={(s) => { setStep(s); setErrors({}); }}
+        />
+      )}
 
       <div className="p-6 sm:p-10">
         <SectionHeading group={current.group} step={step} title={current.title} subtitle={current.subtitle} />
@@ -753,9 +825,6 @@ export default function NominationForm() {
           {current.id === "social-media" && (
             <SocialMediaSection data={data} update={update} errors={errors} />
           )}
-          {current.id === "happy-moment" && (
-            <HappyMomentSection data={data} update={update} errors={errors} />
-          )}
           {current.id === "best-practice" && (
             <BestPracticeSection data={data} update={update} errors={errors} />
           )}
@@ -777,9 +846,6 @@ export default function NominationForm() {
           )}
           {current.id === "star-of-rotaract" && (
             <StarOfRotaractSection data={data} update={update} errors={errors} />
-          )}
-          {current.id === "favorite-do" && (
-            <FavoriteDOSection data={data} update={update} errors={errors} />
           )}
           {current.id === "declaration" && (
             <DeclarationSection data={data} update={update} errors={errors} />
@@ -848,18 +914,127 @@ export default function NominationForm() {
                 {submitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Submitting...
+                    Saving...
                   </>
                 ) : step === FLOW.length - 1 ? (
-                  "Submit Nomination"
+                  editMode ? "Update Nomination ✓" : "Save Nomination ✓"
                 ) : (
-                  "Continue →"
+                  editMode ? "Save & Continue →" : "Continue →"
                 )}
               </button>
             </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   Section Navigator (edit mode)
+   ========================================================= */
+
+function SectionNavigator({
+  currentStep,
+  data,
+  onJump,
+}: {
+  currentStep: number;
+  data: FormState;
+  onJump: (step: number) => void;
+}) {
+  const [open, setOpen] = useState(true);
+
+  // Group FLOW entries by their group label
+  const groups = useMemo(() => {
+    const map = new Map<string, { step: number; id: string; title: string }[]>();
+    FLOW.forEach((f, i) => {
+      if (!map.has(f.group)) map.set(f.group, []);
+      map.get(f.group)!.push({ step: i, id: f.id, title: f.title });
+    });
+    return map;
+  }, []);
+
+  // Simple check: is there meaningful data for a given step?
+  function hasData(id: string): boolean {
+    if (id === "identity") return !!data.clubName.trim();
+    if (id === "docs") return !!data.riDuesPaid;
+    if (id.startsWith("project:")) {
+      const key = id.split(":")[1] as ProjectKey;
+      return !!data.projects[key]?.nominate;
+    }
+    if (id === "club-award") return !!data.clubSelfEval.trim();
+    if (id === "social-media") return !!data.socialMediaDesc.trim();
+    if (id === "best-practice") return !!data.bestPracticeDesc.trim();
+    if (id === "president") return !!data.president.name.trim();
+    if (id === "secretary") return !!data.secretary.name.trim();
+    if (id === "star-of-rotaract") return !!data.starNominees[0].name.trim();
+    if (id === "declaration") return !!data.declarationName.trim();
+    return false;
+  }
+
+  return (
+    <div className="border-b border-[rgba(214,186,115,0.18)] bg-[rgba(214,186,115,0.04)]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-6 py-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#d6ba73] animate-pulse-gold" />
+          <span className="text-[10px] uppercase tracking-[0.28em] text-[#d6ba73]">
+            Edit Mode · Jump to any section
+          </span>
+        </div>
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          className={`transition-transform text-[#d6ba73] ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-6 pb-5 grid gap-4">
+          {Array.from(groups.entries()).map(([group, sections]) => (
+            <div key={group}>
+              <div className="text-[9px] uppercase tracking-[0.3em] text-[rgba(244,234,213,0.35)] mb-2">
+                {group}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sections.map(({ step, id, title }) => {
+                  const isCurrent = step === currentStep;
+                  const done = hasData(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => onJump(step)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all border ${
+                        isCurrent
+                          ? "border-[#d6ba73] bg-[rgba(214,186,115,0.15)] text-[#f4ead5] font-semibold"
+                          : "border-[rgba(214,186,115,0.2)] text-[rgba(244,234,213,0.65)] hover:border-[rgba(214,186,115,0.5)] hover:text-[#f4ead5]"
+                      }`}
+                    >
+                      {done && !isCurrent && (
+                        <span className="w-3 h-3 rounded-full bg-[rgba(214,186,115,0.3)] grid place-items-center shrink-0">
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none">
+                            <path d="M5 12l4 4L19 7" stroke="#d6ba73" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#d6ba73] shrink-0" />
+                      )}
+                      <span className="truncate max-w-[120px]">{title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -999,6 +1174,77 @@ function YesNoToggle({
   );
 }
 
+function EventAttendanceList({
+  options,
+  value,
+  counts,
+  onChange,
+  onCountChange,
+}: {
+  options: string[];
+  value: string[];
+  counts: Record<string, string>;
+  onChange: (next: string[]) => void;
+  onCountChange: (event: string, count: string) => void;
+}) {
+  function toggle(opt: string) {
+    const has = value.includes(opt);
+    onChange(has ? value.filter((v) => v !== opt) : [...value, opt]);
+  }
+  return (
+    <div className="grid gap-2">
+      {options.map((opt) => {
+        const active = value.includes(opt);
+        return (
+          <div
+            key={opt}
+            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+              active
+                ? "border-[#d6ba73] bg-[rgba(214,186,115,0.1)]"
+                : "border-[rgba(214,186,115,0.18)] hover:border-[rgba(214,186,115,0.4)]"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => toggle(opt)}
+              className="flex items-center gap-3 flex-1 text-left min-w-0"
+            >
+              <span
+                className={`w-4 h-4 rounded-sm border grid place-items-center shrink-0 ${
+                  active ? "border-[#d6ba73] bg-[#d6ba73]" : "border-[rgba(214,186,115,0.5)]"
+                }`}
+              >
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12l4 4L19 7" stroke="#0a0d18" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className={`text-sm truncate ${active ? "text-[#f4ead5]" : "text-[rgba(244,234,213,0.7)]"}`}>{opt}</span>
+            </button>
+            {active && (
+              <label className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-[rgba(244,234,213,0.5)] whitespace-nowrap">
+                  Members attended
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  className="input-field !w-20 !py-1.5 text-center"
+                  value={counts[opt] ?? ""}
+                  onChange={(e) => onCountChange(opt, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="0"
+                />
+              </label>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CheckboxList({
   options,
   value,
@@ -1073,35 +1319,102 @@ function FileField({
   hint,
   required,
   error,
+  subfolder,
 }: {
   label: string;
   value: string;
-  onChange: (name: string) => void;
+  onChange: (url: string) => void;
   accept?: string;
   hint?: string;
   required?: boolean;
   error?: string;
+  /** Optional Drive subfolder name to keep files organised (e.g. "logos", "dues", "projects") */
+  subfolder?: string;
 }) {
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
+
+  const isUrl = !!value && (value.startsWith("https://") || value.startsWith("/uploads/"));
+  const displayName = isUrl ? "✓ Uploaded" : (value || "");
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const prefix = subfolder ? `${subfolder.toUpperCase()}_` : "";
+      const filename = `${prefix}${Date.now()}_${file.name}`;
+
+      const base64File = await getBase64(file);
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ file: base64File, filename, mimeType: file.type }),
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+      });
+
+      const result = await response.json();
+      if (result.status !== "success") throw new Error(result.message || "Upload failed.");
+
+      onChange(result.fileUrl as string);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed.";
+      setUploadError(msg);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <Field label={label} hint={hint} error={error} required={required}>
-      <label className="block">
+    <Field label={label} hint={hint} error={error || uploadError || undefined} required={required}>
+      <label className={`block ${uploading ? "pointer-events-none" : "cursor-pointer"}`}>
         <input
           type="file"
           accept={accept}
           className="hidden"
-          onChange={(e) => onChange(e.target.files?.[0]?.name || "")}
+          disabled={uploading}
+          onChange={handleChange}
         />
         <div
-          className={`input-field flex items-center justify-between cursor-pointer ${
-            value ? "border-[rgba(214,186,115,0.5)]" : ""
+          className={`input-field flex items-center justify-between gap-3 ${
+            isUrl
+              ? "border-[rgba(214,186,115,0.5)]"
+              : value
+                ? "border-[rgba(214,186,115,0.3)]"
+                : ""
           }`}
         >
-          <span className={value ? "text-[#f4ead5]" : "text-[rgba(244,234,213,0.5)]"}>
-            {value || "Choose a file…"}
+          <span
+            className={`truncate text-sm ${
+              isUrl || value ? "text-[#f4ead5]" : "text-[rgba(244,234,213,0.45)]"
+            }`}
+          >
+            {uploading ? "Uploading…" : displayName || "Choose a file…"}
           </span>
-          <span className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73]">Upload</span>
+
+          <span
+            className={`shrink-0 text-[10px] uppercase tracking-[0.22em] ${
+              uploading ? "text-[rgba(214,186,115,0.45)] animate-pulse" : "text-[#d6ba73]"
+            }`}
+          >
+            {uploading ? "UPLOADING" : isUrl ? "CHANGE" : "UPLOAD"}
+          </span>
         </div>
       </label>
+
+      {/* View link when a Drive URL is stored */}
+      {isUrl && !uploading && (
+        <a
+          href={value}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1 text-[11px] text-[rgba(214,186,115,0.7)] hover:text-[#d6ba73] transition-colors"
+        >
+          View uploaded file ↗
+        </a>
+      )}
     </Field>
   );
 }
@@ -1173,6 +1486,40 @@ function IdentitySection({
           })}
         </div>
       </Field>
+
+      <div className="glass rounded-2xl p-5">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
+          Club Logo
+        </div>
+        <p className="text-sm text-[rgba(244,234,213,0.6)] mb-4">
+          Upload your club&apos;s official logo in PNG format. This will appear on your nomination
+          certificate and award materials.
+        </p>
+        <div className="flex items-start gap-5 flex-wrap">
+          {data.clubLogo && (
+            <div className="w-20 h-20 rounded-xl border border-[rgba(214,186,115,0.3)] bg-[rgba(214,186,115,0.05)] grid place-items-center overflow-hidden shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={data.clubLogo}
+                alt="Club logo preview"
+                className="w-full h-full object-contain p-1"
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <FileField
+              label="Upload Club Logo"
+              value={data.clubLogo}
+              onChange={(name) => update("clubLogo", name)}
+              accept="image/png"
+              hint="PNG only · transparent background recommended · max 4 MB"
+              required
+              error={errors.clubLogo}
+              subfolder="logos"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1207,9 +1554,34 @@ function DocsSection({
       <Field label="RI Dues paid for 2025-26" error={errors.riDuesPaid} required>
         <YesNoToggle value={data.riDuesPaid} onChange={(v) => update("riDuesPaid", v)} />
       </Field>
+      {data.riDuesPaid === "yes" && (
+        <FileField
+          label="Upload RI Dues payment proof"
+          value={data.riDuesProof}
+          onChange={(name) => update("riDuesProof", name)}
+          accept="application/pdf,image/*"
+          hint="Receipt or confirmation of RI dues payment (PDF or image, max 4 MB)."
+          required
+          error={errors.riDuesProof}
+          subfolder="dues"
+        />
+      )}
+
       <Field label="District Dues paid for 2025-26" error={errors.districtDuesPaid} required>
         <YesNoToggle value={data.districtDuesPaid} onChange={(v) => update("districtDuesPaid", v)} />
       </Field>
+      {data.districtDuesPaid === "yes" && (
+        <FileField
+          label="Upload District Dues payment proof"
+          value={data.districtDuesProof}
+          onChange={(name) => update("districtDuesProof", name)}
+          accept="application/pdf,image/*"
+          hint="Receipt or confirmation of District dues payment (PDF or image, max 4 MB)."
+          required
+          error={errors.districtDuesProof}
+          subfolder="dues"
+        />
+      )}
 
       {data.clubType === "community" && (
         <>
@@ -1228,8 +1600,73 @@ function DocsSection({
               hint="Latest statement or letter from the bank (PDF or image, max 4 MB)."
               required
               error={errors.bankProofName}
+              subfolder="dues"
             />
           )}
+          <FileField
+            label="Upload Account Created Mail (PDF)"
+            value={data.accountCreatedMailProof}
+            onChange={(name) => update("accountCreatedMailProof", name)}
+            accept="application/pdf"
+            hint="The bank's account opening confirmation email / letter exported as PDF (max 4 MB)."
+            required
+            error={errors.accountCreatedMailProof}
+            subfolder="dues"
+          />
+
+          {/* ── Colour Galata ── */}
+          <div className="glass rounded-2xl p-5">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
+              Colour Galata — District Initiative
+            </div>
+            <p className="text-sm text-[rgba(244,234,213,0.6)] mb-4">
+              Community-based clubs are expected to participate in the Colour Galata district initiative.
+            </p>
+            <Field
+              label="Did your club host / participate in Colour Galata?"
+              error={errors.colourGalataHosted}
+              required
+            >
+              <YesNoToggle
+                value={data.colourGalataHosted}
+                onChange={(v) => update("colourGalataHosted", v)}
+              />
+            </Field>
+            {data.colourGalataHosted === "yes" && (
+              <div className="mt-4">
+                <Field
+                  label="How much did your club contribute?"
+                  error={errors.colourGalataContribution}
+                  hint="Amount raised / number of volunteers / scope of involvement — be specific."
+                  required
+                >
+                  <textarea
+                    className="input-field min-h-[90px]"
+                    value={data.colourGalataContribution}
+                    onChange={(e) => update("colourGalataContribution", e.target.value)}
+                    placeholder="e.g. ₹15,000 raised · 30 volunteers · managed 2 stalls"
+                  />
+                </Field>
+              </div>
+            )}
+            {data.colourGalataHosted === "no" && (
+              <div className="mt-4">
+                <Field
+                  label="Why did your club not participate?"
+                  error={errors.colourGalataReason}
+                  hint="Be honest — the jury values transparency."
+                  required
+                >
+                  <textarea
+                    className="input-field min-h-[90px]"
+                    value={data.colourGalataReason}
+                    onChange={(e) => update("colourGalataReason", e.target.value)}
+                    placeholder="Describe the circumstances that prevented participation."
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -1253,21 +1690,47 @@ function ProjectSection({
 }) {
   const project = data.projects[projectKey];
   const meta = PROJECT_SECTIONS.find((p) => p.key === projectKey)!;
-
+  console.log("DEBUG PROJECT SECTION:", projectKey, "nominate:", project?.nominate, "typeof project:", typeof project, "project keys:", Object.keys(project || {}), "name:", project?.name);
   return (
     <div className="grid gap-5">
       <div className="glass rounded-2xl p-5 flex items-start justify-between gap-4 flex-wrap">
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73]">
             {meta.avenue} avenue
           </div>
           <div className="mt-1 font-display text-2xl text-[#f4ead5]">{meta.title}</div>
           <p className="mt-1 text-sm text-[rgba(244,234,213,0.65)] max-w-xl">{meta.description}</p>
+          {meta.note && (
+            <div
+              className={`mt-3 flex items-start gap-2 px-4 py-3 rounded-xl text-sm leading-snug ${
+                meta.noteType === "warning"
+                  ? "bg-[rgba(251,191,36,0.08)] border border-[rgba(251,191,36,0.3)] text-[#fde68a]"
+                  : "bg-[rgba(214,186,115,0.07)] border border-[rgba(214,186,115,0.25)] text-[rgba(244,234,213,0.75)]"
+              }`}
+            >
+              {meta.noteType === "warning" ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5 text-[#fbbf24]">
+                  <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5 text-[#d6ba73]">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                  <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
+              <span>{meta.note}</span>
+            </div>
+          )}
         </div>
-        <label className="flex items-center gap-3 cursor-pointer text-sm shrink-0">
+        <div className="flex items-center gap-3 cursor-pointer text-sm shrink-0">
           <span className="text-[rgba(244,234,213,0.7)]">Nominate in this category</span>
           <span
-            onClick={() => updateProject(projectKey, { nominate: !project.nominate })}
+            onClick={(e) => {
+              console.log("SWITCH CLICKED! projectKey:", projectKey, "current nominate:", project.nominate);
+              e.stopPropagation();
+              updateProject(projectKey, { nominate: !project.nominate });
+            }}
             className={`relative w-12 h-7 rounded-full transition-colors ${
               project.nominate ? "bg-[#d6ba73]" : "bg-[rgba(214,186,115,0.2)]"
             }`}
@@ -1278,7 +1741,7 @@ function ProjectSection({
               }`}
             />
           </span>
-        </label>
+        </div>
       </div>
 
       {!project.nominate && (
@@ -1298,24 +1761,49 @@ function ProjectSection({
               placeholder="Give the project its full title"
             />
           </Field>
-          <div className="grid sm:grid-cols-2 gap-5">
-            <Field label="Project Start Date" error={errors.startDate} required>
-              <input
-                type="date"
-                className="input-field"
-                value={project.startDate}
-                onChange={(e) => updateProject(projectKey, { startDate: e.target.value })}
+
+          {projectKey === "joint" && (
+            <Field
+              label="Co-host Club(s)"
+              error={errors.coHostClubs}
+              hint="Name every club this project was done in partnership with — one per line."
+              required
+            >
+              <textarea
+                className="input-field min-h-[90px]"
+                value={project.coHostClubs}
+                onChange={(e) => updateProject(projectKey, { coHostClubs: e.target.value })}
+                placeholder={"Rotaract Club of …\nRotaract Club of …"}
               />
             </Field>
-            <Field label="Project End Date" error={errors.endDate} required>
-              <input
-                type="date"
-                className="input-field"
-                value={project.endDate}
-                onChange={(e) => updateProject(projectKey, { endDate: e.target.value })}
-              />
-            </Field>
-          </div>
+          )}
+
+          {(() => {
+            const PRIMARY_KEYS: ProjectKey[] = ["club-service-1", "professional-1", "community-1", "international-1"];
+            const dateMin = PRIMARY_KEYS.includes(projectKey) ? "2025-12-07" : undefined;
+            return (
+              <div className="grid sm:grid-cols-2 gap-5">
+                <Field label="Project Start Date" error={errors.startDate} required>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={project.startDate}
+                    min={dateMin}
+                    onChange={(e) => updateProject(projectKey, { startDate: e.target.value })}
+                  />
+                </Field>
+                <Field label="Project End Date" error={errors.endDate} required>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={project.endDate}
+                    min={dateMin}
+                    onChange={(e) => updateProject(projectKey, { endDate: e.target.value })}
+                  />
+                </Field>
+              </div>
+            );
+          })()}
           <Field
             label="Number of Beneficiaries"
             error={errors.beneficiaries}
@@ -1378,16 +1866,19 @@ function ProjectSection({
                 label="Picture 1"
                 value={project.picture1}
                 onChange={(n) => updateProject(projectKey, { picture1: n })}
+                subfolder="projects"
               />
               <FileField
                 label="Picture 2"
                 value={project.picture2}
                 onChange={(n) => updateProject(projectKey, { picture2: n })}
+                subfolder="projects"
               />
               <FileField
                 label="Picture 3"
                 value={project.picture3}
                 onChange={(n) => updateProject(projectKey, { picture3: n })}
+                subfolder="projects"
               />
             </div>
             {errors.pictures && (
@@ -1446,11 +1937,19 @@ function ClubAwardSection({
         <WordCount text={data.clubSelfEval} max={300} />
       </Field>
 
-      <Field label="District Events Participated" required>
-        <CheckboxList
+      <Field
+        label="District Events Participated"
+        hint="Check each event your club attended and enter how many members were present."
+        required
+      >
+        <EventAttendanceList
           options={DISTRICT_EVENTS_CLUB}
           value={data.clubEvents}
+          counts={data.clubEventCounts}
           onChange={(v) => update("clubEvents", v)}
+          onCountChange={(evt, cnt) =>
+            update("clubEventCounts", { ...data.clubEventCounts, [evt]: cnt })
+          }
         />
       </Field>
 
@@ -1490,16 +1989,19 @@ function ClubAwardSection({
         <Field
           label="District Rotaract Council Meetings Attended"
           error={errors.drcMeetingsAttended}
-          hint="Enter only numbers."
+          hint="Maximum 10."
           required
         >
-          <input
-            type="number"
+          <select
             className="input-field"
             value={data.drcMeetingsAttended}
             onChange={(e) => update("drcMeetingsAttended", e.target.value)}
-            placeholder="0"
-          />
+          >
+            <option value="">Select…</option>
+            {Array.from({ length: 11 }, (_, i) => (
+              <option key={i} value={String(i)}>{i}</option>
+            ))}
+          </select>
         </Field>
         <Field
           label="Close Door Meetings Attended (President + Secretary)"
@@ -1544,14 +2046,21 @@ function ClubAwardSection({
             placeholder="Comma-separated list (or No)"
           />
         </Field>
-        <Field label="Twin / Sister Club agreement for 2025-26" required>
-          <input
-            className="input-field"
-            value={data.twinClubAgreement}
-            onChange={(e) => update("twinClubAgreement", e.target.value)}
-            placeholder="If your club has completed any twin club agreement, name them. If no, mention No."
-          />
+        <Field label="Twin / Sister Club agreement for 2025-26" error={errors.twinClubAgreement} required>
+          <YesNoToggle value={data.twinClubAgreement} onChange={(v) => update("twinClubAgreement", v)} />
         </Field>
+        {data.twinClubAgreement === "yes" && (
+          <FileField
+            label="Upload signed Twin / Sister Club agreement (PDF)"
+            value={data.twinClubAgreementProof}
+            onChange={(name) => update("twinClubAgreementProof", name)}
+            accept="application/pdf"
+            hint="The signed agreement document exported as PDF (max 4 MB)."
+            required
+            error={errors.twinClubAgreementProof}
+            subfolder="agreements"
+          />
+        )}
         <Field
           label="Number of District Officials from the Club"
           hint="Enter only numbers."
@@ -1644,62 +2153,7 @@ function SocialMediaSection({
 }
 
 /* =========================================================
-   Section 20 — Happy Moment
-   ========================================================= */
-
-function HappyMomentSection({
-  data,
-  update,
-  errors,
-}: {
-  data: FormState;
-  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-  errors: Record<string, string>;
-}) {
-  return (
-    <div className="grid gap-5">
-      <Field
-        label="A member initiative or practice for a happy club culture"
-        error={errors.happyMomentDesc}
-        hint="Within 150 words."
-        required
-      >
-        <textarea
-          className="input-field min-h-[130px]"
-          value={data.happyMomentDesc}
-          onChange={(e) => update("happyMomentDesc", e.target.value)}
-          placeholder="A ritual, a tradition, a tiny weekly thing that built belonging."
-        />
-        <WordCount text={data.happyMomentDesc} max={150} />
-      </Field>
-      <div className="glass rounded-2xl p-5">
-        <div className="text-[11px] uppercase tracking-[0.22em] text-[#d6ba73] mb-3">
-          Supporting pictures · optional, up to 3, ≤4 MB each
-        </div>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <FileField
-            label="Picture 1"
-            value={data.happyMomentPic1}
-            onChange={(n) => update("happyMomentPic1", n)}
-          />
-          <FileField
-            label="Picture 2"
-            value={data.happyMomentPic2}
-            onChange={(n) => update("happyMomentPic2", n)}
-          />
-          <FileField
-            label="Picture 3"
-            value={data.happyMomentPic3}
-            onChange={(n) => update("happyMomentPic3", n)}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   Section 21 — Best Practice
+   Section 20 — Best Practice
    ========================================================= */
 
 function BestPracticeSection({
@@ -1736,16 +2190,19 @@ function BestPracticeSection({
             label="Picture 1"
             value={data.bestPracticePic1}
             onChange={(n) => update("bestPracticePic1", n)}
+            subfolder="best-practice"
           />
           <FileField
             label="Picture 2"
             value={data.bestPracticePic2}
             onChange={(n) => update("bestPracticePic2", n)}
+            subfolder="best-practice"
           />
           <FileField
             label="Picture 3"
             value={data.bestPracticePic3}
             onChange={(n) => update("bestPracticePic3", n)}
+            subfolder="best-practice"
           />
         </div>
       </div>
@@ -1789,6 +2246,15 @@ function OfficerSection({
           placeholder={isPresident ? "Rtr. Name" : "Rtr. Name"}
         />
       </Field>
+
+      <FileField
+        label={`${isPresident ? "President" : "Secretary"}'s Professional Photo`}
+        value={data.professionalImage}
+        onChange={(n) => update({ professionalImage: n })}
+        accept="image/*"
+        hint="A clear headshot or professional portrait (JPG/PNG, max 4 MB). Optional but recommended."
+        subfolder="officers"
+      />
 
       <Field
         label={
@@ -1839,6 +2305,21 @@ function OfficerSection({
         <WordCount text={data.consistency} max={100} />
       </Field>
 
+      <Field
+        label={`Biggest Challenge You Faced This Year as ${isPresident ? "President" : "Secretary"}`}
+        error={errors.challengeThisYear}
+        hint="Within 150 words — be frank and specific."
+        required
+      >
+        <textarea
+          className="input-field min-h-[110px]"
+          value={data.challengeThisYear}
+          onChange={(e) => update({ challengeThisYear: e.target.value })}
+          placeholder="Describe the hardest problem you navigated this year and how you handled it."
+        />
+        <WordCount text={data.challengeThisYear} max={150} />
+      </Field>
+
       <Field label={`District Events Participated by ${isPresident ? "President" : "Secretary"}`} required>
         <CheckboxList
           options={DISTRICT_EVENTS_OFFICER}
@@ -1875,16 +2356,19 @@ function OfficerSection({
         <Field
           label="District Rotaract Council Meetings Attended"
           error={errors.drcMeetings}
-          hint="Enter only numbers."
+          hint="Maximum 10."
           required
         >
-          <input
-            type="number"
+          <select
             className="input-field"
             value={data.drcMeetings}
             onChange={(e) => update({ drcMeetings: e.target.value })}
-            placeholder="0"
-          />
+          >
+            <option value="">Select…</option>
+            {Array.from({ length: 11 }, (_, i) => (
+              <option key={i} value={String(i)}>{i}</option>
+            ))}
+          </select>
         </Field>
         <Field
           label="Close Door Meetings Attended"
@@ -1918,6 +2402,37 @@ function OfficerSection({
           placeholder="If no, mention No"
         />
       </Field>
+
+      <div className="glass rounded-2xl p-5 grid gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
+            Top 3 District Official Nominations
+          </div>
+          <p className="text-sm text-[rgba(244,234,213,0.6)]">
+            Nominate up to 3 District Officials you felt made the biggest impact this year.
+            <span className="block mt-1 text-[rgba(244,234,213,0.45)]">
+              DRR, GRR and GRS are excluded. You may not nominate your own club&apos;s President or Secretary.
+            </span>
+          </p>
+          {errors.top3DO && (
+            <p className="mt-1 text-xs text-[#f6b8a3]">{errors.top3DO}</p>
+          )}
+        </div>
+        {([0, 1, 2] as const).map((i) => (
+          <Field key={i} label={`Nominee ${i + 1}${i === 0 ? " (required)" : " (optional)"}`}>
+            <input
+              className="input-field"
+              value={data.top3DO[i]}
+              onChange={(e) => {
+                const next: [string, string, string] = [...data.top3DO] as [string, string, string];
+                next[i] = e.target.value;
+                update({ top3DO: next });
+              }}
+              placeholder="Rtr. Full Name · Role"
+            />
+          </Field>
+        ))}
+      </div>
 
       <Field
         label="Submission of Supporting Photographs"
@@ -1996,74 +2511,6 @@ function StarOfRotaractSection({
                 update("starNominees", next);
               }}
               placeholder="What made them a Star this year?"
-            />
-            <WordCount text={n.eval} max={50} />
-          </Field>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* =========================================================
-   Section 25 — Favorite District Official
-   ========================================================= */
-
-function FavoriteDOSection({
-  data,
-  update,
-  errors,
-}: {
-  data: FormState;
-  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
-  errors: Record<string, string>;
-}) {
-  return (
-    <div className="grid gap-6">
-      <div className="glass rounded-2xl p-5 text-sm text-[rgba(244,234,213,0.7)]">
-        Nominate three district officials your club loved working with. Each evaluation can be up to
-        50 words.
-      </div>
-
-      {data.favoriteDONominees.map((n, i) => (
-        <div key={i} className="glass rounded-2xl p-6 grid gap-4">
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73]">Nominee {i + 1}</div>
-          <Field
-            label="Name of the District Official"
-            error={errors[`do-name-${i}`]}
-            hint="Format: Rtr. Name"
-            required
-          >
-            <input
-              className="input-field"
-              value={n.name}
-              onChange={(e) => {
-                const next: [StarNominee, StarNominee, StarNominee] = [
-                  ...data.favoriteDONominees,
-                ] as [StarNominee, StarNominee, StarNominee];
-                next[i] = { ...next[i], name: e.target.value };
-                update("favoriteDONominees", next);
-              }}
-              placeholder="Rtr. Full Name"
-            />
-          </Field>
-          <Field
-            label="Favorite District Official nomination"
-            error={errors[`do-eval-${i}`]}
-            hint="Within 50 words."
-            required
-          >
-            <textarea
-              className="input-field min-h-[100px]"
-              value={n.eval}
-              onChange={(e) => {
-                const next: [StarNominee, StarNominee, StarNominee] = [
-                  ...data.favoriteDONominees,
-                ] as [StarNominee, StarNominee, StarNominee];
-                next[i] = { ...next[i], eval: e.target.value };
-                update("favoriteDONominees", next);
-              }}
-              placeholder="Why your club championed them."
             />
             <WordCount text={n.eval} max={50} />
           </Field>
@@ -2167,7 +2614,6 @@ function ReviewSummary({ data, projectCount }: { data: FormState; projectCount: 
     { l: "President", v: data.president.name || "—" },
     { l: "Secretary", v: data.secretary.name || "—" },
     { l: "Star nominees", v: data.starNominees.map((n) => n.name).filter(Boolean).join(", ") || "—" },
-    { l: "Favorite DOs", v: data.favoriteDONominees.map((n) => n.name).filter(Boolean).join(", ") || "—" },
   ];
   return (
     <div className="glass rounded-2xl p-6">
@@ -2229,34 +2675,43 @@ function IneligibilityCard({ onReset }: { onReset: () => void }) {
   );
 }
 
-function ThankYouCard({ id, onRestart }: { id: string; onRestart: () => void }) {
+function ThankYouCard({
+  id,
+  onRestart,
+  onEdit,
+}: {
+  id: string;
+  onRestart: () => void;
+  onEdit: () => void;
+}) {
   return (
     <div className="relative glass-strong rounded-3xl p-10 sm:p-14 text-center overflow-hidden">
       <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[60%] h-72 star-burst blur-3xl opacity-70" />
       <div className="relative">
         <div className="mx-auto w-20 h-20 rounded-full grid place-items-center bg-[rgba(214,186,115,0.12)] border border-[rgba(214,186,115,0.5)] ring-gold">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M5 12l4 4L19 7"
-              stroke="#d6ba73"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d="M5 12l4 4L19 7" stroke="#d6ba73" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <div className="chip mt-6 mx-auto">Nomination received</div>
+        <div className="chip mt-6 mx-auto">Nomination saved</div>
         <h2 className="mt-4 font-display text-4xl sm:text-5xl">
           <span className="gold-text">A story worth standing for.</span>
         </h2>
         <p className="mt-4 text-[rgba(244,234,213,0.7)] max-w-md mx-auto text-sm leading-relaxed">
-          Your nomination is in the jury's hands. We've saved it under reference{" "}
-          <span className="text-[#e8d49a] font-semibold">{id}</span>. We don't reveal names,
-          clubs or numbers — only the count moves on the public site.
+          Your nomination is saved under reference{" "}
+          <span className="text-[#e8d49a] font-semibold">{id}</span>. You can edit any section
+          before the deadline. We don&apos;t reveal names, clubs or numbers — only the count moves on the
+          public site.
         </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <button onClick={onRestart} className="btn-gold px-7 py-2.5 rounded-full text-sm font-semibold">
-            Start another nomination
+          <button
+            onClick={onEdit}
+            className="btn-gold px-7 py-2.5 rounded-full text-sm font-semibold"
+          >
+            ✏️ Edit my submission
+          </button>
+          <button onClick={onRestart} className="btn-ghost px-7 py-2.5 rounded-full text-sm">
+            Start fresh
           </button>
           <a href="/" className="btn-ghost px-7 py-2.5 rounded-full text-sm">
             Back to home
