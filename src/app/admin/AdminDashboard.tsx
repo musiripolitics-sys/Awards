@@ -140,7 +140,7 @@ const LEVEL_ORDER: EvalLevel[] = [
   "winner", "gold", "silver", "bronze", "shortlisted", "reviewed", "pending",
 ];
 
-const CAT_EVALS_KEY = "ignus-cat-evals-v1";
+const CAT_EVALS_KEY = "ignis-cat-evals-v1";
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 function hasNominated(item: Submission, catId: string): boolean {
@@ -167,7 +167,7 @@ function formatDate(iso: string) {
 
 function isAuthed() {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem("ignus-admin-auth") === "1";
+  return localStorage.getItem("ignis-admin-auth") === "1";
 }
 
 /* ─── Main component ──────────────────────────────────────────────────────── */
@@ -219,7 +219,7 @@ export default function AdminDashboard() {
   function login(e: React.FormEvent) {
     e.preventDefault();
     if (user.trim() === "Vaticancity" && pass.trim() === "KNKbannana24") {
-      localStorage.setItem("ignus-admin-auth", "1");
+      localStorage.setItem("ignis-admin-auth", "1");
       setAuthed(true);
       setAuthErr("");
     } else {
@@ -228,7 +228,7 @@ export default function AdminDashboard() {
   }
 
   function logout() {
-    localStorage.removeItem("ignus-admin-auth");
+    localStorage.removeItem("ignis-admin-auth");
     setAuthed(false);
     setUser(""); setPass("");
   }
@@ -315,7 +315,7 @@ export default function AdminDashboard() {
                 </svg>
               </div>
               <div>
-                <div className="text-[9px] uppercase tracking-[0.28em] text-[rgba(244,234,213,0.5)]">IGNUS</div>
+                <div className="text-[9px] uppercase tracking-[0.28em] text-[rgba(244,234,213,0.5)]">IGNIS</div>
                 <div className="text-[11px] uppercase tracking-[0.22em] text-[#d6ba73]">Admin Console</div>
               </div>
             </div>
@@ -362,7 +362,7 @@ export default function AdminDashboard() {
       <div className="glass-strong rounded-2xl px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-5 flex-wrap">
           <div>
-            <div className="text-[9px] uppercase tracking-[0.3em] text-[rgba(244,234,213,0.45)]">IGNUS · District 3233</div>
+            <div className="text-[9px] uppercase tracking-[0.3em] text-[rgba(244,234,213,0.45)]">IGNIS · District 3233</div>
             <div className="font-display text-xl gold-text">Awards Console</div>
           </div>
           <div className="h-8 w-px bg-[rgba(214,186,115,0.2)] hidden sm:block" />

@@ -1,7 +1,7 @@
 import AdminDashboard from "./AdminDashboard";
 
 export const metadata = {
-  title: "IGNUS Admin Console · District Awards",
+  title: "IGNIS Admin Console · District Awards",
 };
 
 export default function AdminPage() {

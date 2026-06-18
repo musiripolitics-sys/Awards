@@ -315,16 +315,21 @@ export default function NominationForm() {
             setDbSubmittedAt(existing.submittedAt);
             setDbStatus(existing.status);
             setEditMode(true);
+            // Resume from last saved step
+            if (typeof existing.lastStep === "number" && existing.lastStep > 0) {
+              setStep(existing.lastStep);
+            }
           } else {
             setData((d) => ({ ...d, clubName: parsedSession.clubName }));
           }
         }
-        
+
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const { __step, ...rest } = JSON.parse(raw);
           setData((d) => ({ ...d, ...rest, projects: { ...d.projects, ...(rest.projects || {}) } }));
-          if (typeof __step === "number") setStep(__step);
+          // Only use localStorage step if no DB step was restored
+          if (typeof __step === "number") setStep((s) => (s === 0 ? __step : s));
         }
 
         if (sessionClub) {
@@ -371,6 +376,10 @@ export default function NominationForm() {
         setDbSubmittedAt(existing.submittedAt);
         setDbStatus(existing.status);
         setEditMode(true);
+        // Resume from last saved step
+        if (typeof existing.lastStep === "number" && existing.lastStep > 0) {
+          setStep(existing.lastStep);
+        }
       } else {
         setData((d) => ({ ...d, clubName: club.clubName }));
       }
@@ -491,9 +500,7 @@ export default function NominationForm() {
       if (data.clubType === "community") {
         if (!data.bankAccountActive) e.bankAccountActive = "Required.";
         if (data.bankAccountActive === "yes" && !data.bankProofName.trim())
-          e.bankProofName = "Upload the bank proof.";
-        if (!data.accountCreatedMailProof.trim())
-          e.accountCreatedMailProof = "Please upload the account created mail (PDF).";
+          e.bankProofName = "Upload the bank account proof.";
         if (!data.colourGalataHosted) e.colourGalataHosted = "Required.";
         if (data.colourGalataHosted === "yes" && !data.colourGalataContribution.trim())
           e.colourGalataContribution = "Please mention how much your club contributed.";
@@ -576,7 +583,33 @@ export default function NominationForm() {
     return true;
   }
 
-  function goNext() {
+  /** Upsert current form state to Supabase, recording which step we're on. */
+  async function saveProgress(nextStep: number): Promise<void> {
+    if (!loggedInClub) return; // not logged in — skip DB save
+    try {
+      const id = dbRecordId || "RDA-" + Date.now().toString(36).toUpperCase();
+      const { __step, ...cleanData } = data as any;
+      const payload = {
+        ...cleanData,
+        id,
+        submittedAt: dbSubmittedAt || new Date().toISOString(),
+        status: dbStatus || "pending",
+        submittedBy: loggedInClub.username,
+        lastStep: nextStep,
+        happyMomentDesc: "",
+      };
+      const { error } = await supabase.from("submissions").upsert([payload]);
+      if (error) throw error;
+      if (!dbRecordId)    setDbRecordId(id);
+      if (!dbSubmittedAt) setDbSubmittedAt(payload.submittedAt);
+      if (!dbStatus)      setDbStatus("pending");
+    } catch (err) {
+      console.error("[saveProgress] failed:", err);
+      // non-fatal — let the user continue even if save failed
+    }
+  }
+
+  async function goNext() {
     const e = validateCurrent();
     setErrors(e);
     if (Object.keys(e).length > 0) return;
@@ -590,6 +623,11 @@ export default function NominationForm() {
       submit();
       return;
     }
+
+    // Save to DB before advancing
+    setSubmitting(true);
+    await saveProgress(step + 1);
+    setSubmitting(false);
 
     setStep((s) => Math.min(FLOW.length - 1, s + 1));
     setErrors({});
@@ -914,12 +952,12 @@ export default function NominationForm() {
                 {submitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Saving...
+                    Saving…
                   </>
                 ) : step === FLOW.length - 1 ? (
-                  editMode ? "Update Nomination ✓" : "Save Nomination ✓"
+                  "Submit Nomination ✓"
                 ) : (
-                  editMode ? "Save & Continue →" : "Continue →"
+                  "Save & Continue →"
                 )}
               </button>
             </div>
@@ -1593,26 +1631,19 @@ function DocsSection({
           </Field>
           {data.bankAccountActive === "yes" && (
             <FileField
-              label="Upload proof of an active bank account"
+              label="Upload Bank Account Proof"
               value={data.bankProofName}
-              onChange={(name) => update("bankProofName", name)}
+              onChange={(name) => {
+                update("bankProofName", name);
+                update("accountCreatedMailProof", name);
+              }}
               accept="application/pdf,image/*"
-              hint="Latest statement or letter from the bank (PDF or image, max 4 MB)."
+              hint="Latest bank statement, bank letter, or account opening confirmation mail (PDF or image, max 4 MB)."
               required
               error={errors.bankProofName}
               subfolder="dues"
             />
           )}
-          <FileField
-            label="Upload Account Created Mail (PDF)"
-            value={data.accountCreatedMailProof}
-            onChange={(name) => update("accountCreatedMailProof", name)}
-            accept="application/pdf"
-            hint="The bank's account opening confirmation email / letter exported as PDF (max 4 MB)."
-            required
-            error={errors.accountCreatedMailProof}
-            subfolder="dues"
-          />
 
           {/* ── Colour Galata ── */}
           <div className="glass rounded-2xl p-5">

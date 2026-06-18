@@ -40,7 +40,7 @@ function Hero() {
           className="font-display text-[44px] sm:text-[68px] md:text-[88px] leading-[1.02] tracking-tight animate-rise"
           style={{ animationDelay: "0.05s" }}
         >
-          <span className="block gold-text">IGNUS</span>
+          <span className="block gold-text">IGNIS</span>
           <span className="block text-[rgba(244,234,213,0.92)] text-[28px] sm:text-[40px] md:text-[52px] mt-2">Annual District Rotaract Awards</span>
         </h1>
 
@@ -48,7 +48,7 @@ function Hero() {
           className="mt-7 mx-auto max-w-2xl text-[15px] sm:text-base text-[rgba(244,234,213,0.7)] leading-relaxed animate-rise"
           style={{ animationDelay: "0.15s" }}
         >
-          IGNUS — the Annual District Rotaract Awards 2025-26 — celebrates the projects, presidents,
+          IGNIS — the Annual District Rotaract Awards 2025-26 — celebrates the projects, presidents,
           and clubs that delivered outstanding impact across every avenue of service. Submit your
           nomination and let the district recognise the work that truly made a difference.
         </p>
@@ -193,7 +193,7 @@ function About() {
               <span className="gold-text">annual honour.</span>
             </>
           }
-          subtitle="IGNUS — the Annual District Rotaract Awards 2025-26 — is the official recognition for the clubs, projects, presidents and members who carried the spirit of Service Above Self through the rotary year. Every entry is reviewed by an independent jury — your work is the only currency that matters here."
+          subtitle="IGNIS — the Annual District Rotaract Awards 2025-26 — is the official recognition for the clubs, projects, presidents and members who carried the spirit of Service Above Self through the rotary year. Every entry is reviewed by an independent jury — your work is the only currency that matters here."
         />
 
         <div className="mt-16 grid md:grid-cols-3 gap-5">
