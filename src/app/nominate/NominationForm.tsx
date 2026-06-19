@@ -68,8 +68,10 @@ type OfficerData = {
   professionalImage: string;
   challengeThisYear: string;
   top3DO: [string, string, string];
-  top3Presidents: [OfficerNominee, OfficerNominee, OfficerNominee];
-  top3Secretaries: [OfficerNominee, OfficerNominee, OfficerNominee];
+  top3CollegePresidents: [OfficerNominee, OfficerNominee, OfficerNominee];
+  top3CommunityPresidents: [OfficerNominee, OfficerNominee, OfficerNominee];
+  top3CollegeSecretaries: [OfficerNominee, OfficerNominee, OfficerNominee];
+  top3CommunitySecretaries: [OfficerNominee, OfficerNominee, OfficerNominee];
 };
 
 type StarNominee = { name: string; eval: string };
@@ -181,12 +183,22 @@ const EMPTY_OFFICER: OfficerData = {
   professionalImage: "",
   challengeThisYear: "",
   top3DO: ["", "", ""],
-  top3Presidents: [
+  top3CollegePresidents: [
     { ...EMPTY_OFFICER_NOMINEE },
     { ...EMPTY_OFFICER_NOMINEE },
     { ...EMPTY_OFFICER_NOMINEE },
   ],
-  top3Secretaries: [
+  top3CommunityPresidents: [
+    { ...EMPTY_OFFICER_NOMINEE },
+    { ...EMPTY_OFFICER_NOMINEE },
+    { ...EMPTY_OFFICER_NOMINEE },
+  ],
+  top3CollegeSecretaries: [
+    { ...EMPTY_OFFICER_NOMINEE },
+    { ...EMPTY_OFFICER_NOMINEE },
+    { ...EMPTY_OFFICER_NOMINEE },
+  ],
+  top3CommunitySecretaries: [
     { ...EMPTY_OFFICER_NOMINEE },
     { ...EMPTY_OFFICER_NOMINEE },
     { ...EMPTY_OFFICER_NOMINEE },
@@ -586,14 +598,17 @@ export default function NominationForm() {
       // All 3 District Official nominations are mandatory
       if (!o.top3DO[0].trim() || !o.top3DO[1].trim() || !o.top3DO[2].trim())
         e.top3DO = "All 3 District Official nominations are required.";
-      // All 3 President nominations are mandatory
-      const presidents = Array.isArray(o.top3Presidents) ? o.top3Presidents : [];
-      if (presidents.length < 3 || presidents.some((n) => !n.name.trim() || !n.clubName.trim()))
-        e.top3Presidents = "All 3 President nominations (name and club) are required.";
-      // All 3 Secretary nominations are mandatory
-      const secretaries = Array.isArray(o.top3Secretaries) ? o.top3Secretaries : [];
-      if (secretaries.length < 3 || secretaries.some((n) => !n.name.trim() || !n.clubName.trim()))
-        e.top3Secretaries = "All 3 Secretary nominations (name and club) are required.";
+      // College / Community President & Secretary nominations — all mandatory
+      const checkNominees = (arr: unknown) =>
+        !Array.isArray(arr) || arr.length < 3 || (arr as OfficerNominee[]).some((n) => !n.name.trim() || !n.clubName.trim());
+      if (checkNominees(o.top3CollegePresidents))
+        e.top3CollegePresidents = "All 3 College-based President nominations are required.";
+      if (checkNominees(o.top3CommunityPresidents))
+        e.top3CommunityPresidents = "All 3 Community-based President nominations are required.";
+      if (checkNominees(o.top3CollegeSecretaries))
+        e.top3CollegeSecretaries = "All 3 College-based Secretary nominations are required.";
+      if (checkNominees(o.top3CommunitySecretaries))
+        e.top3CommunitySecretaries = "All 3 Community-based Secretary nominations are required.";
     }
     if (id === "star-of-rotaract") {
       data.starNominees.forEach((n, i) => {
@@ -2334,14 +2349,14 @@ function OfficerSection({
 
   // Guard against old Supabase records that pre-date these fields
   const emptyNominee: OfficerNominee = { name: "", clubName: "" };
-  const top3Presidents: [OfficerNominee, OfficerNominee, OfficerNominee] =
-    Array.isArray(data.top3Presidents) && data.top3Presidents.length === 3
-      ? data.top3Presidents
-      : [{ ...emptyNominee }, { ...emptyNominee }, { ...emptyNominee }];
-  const top3Secretaries: [OfficerNominee, OfficerNominee, OfficerNominee] =
-    Array.isArray(data.top3Secretaries) && data.top3Secretaries.length === 3
-      ? data.top3Secretaries
-      : [{ ...emptyNominee }, { ...emptyNominee }, { ...emptyNominee }];
+  const fallback3 = (): [OfficerNominee, OfficerNominee, OfficerNominee] =>
+    [{ ...emptyNominee }, { ...emptyNominee }, { ...emptyNominee }];
+  const safeList = (v: unknown): [OfficerNominee, OfficerNominee, OfficerNominee] =>
+    Array.isArray(v) && v.length === 3 ? (v as [OfficerNominee, OfficerNominee, OfficerNominee]) : fallback3();
+  const top3CollegePresidents   = safeList(data.top3CollegePresidents);
+  const top3CommunityPresidents = safeList(data.top3CommunityPresidents);
+  const top3CollegeSecretaries   = safeList(data.top3CollegeSecretaries);
+  const top3CommunitySecretaries = safeList(data.top3CommunitySecretaries);
 
   return (
     <div className="grid gap-5">
@@ -2567,97 +2582,60 @@ function OfficerSection({
         ))}
       </div>
 
-      {/* ── Top 3 President Nominations (mandatory) ── */}
-      <div className="glass rounded-2xl p-5 grid gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
-            Top 3 President Nominations <span className="text-[#f6b8a3]">*</span>
-          </div>
-          <p className="text-sm text-[rgba(244,234,213,0.6)]">
-            Nominate 3 Presidents from other clubs whom you feel deserve recognition. All 3 are required.
-          </p>
-          {errors.top3Presidents && (
-            <p className="mt-1 text-xs text-[#f6b8a3]">{errors.top3Presidents}</p>
-          )}
-        </div>
-        {([0, 1, 2] as const).map((i) => (
-          <div key={i} className="grid sm:grid-cols-2 gap-3 border border-[rgba(214,186,115,0.12)] rounded-xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[rgba(244,234,213,0.4)] col-span-full mb-1">
-              Nominee {i + 1}
+      {/* ── Helper to render a nominations block ── */}
+      {(
+        [
+          { key: "top3CollegePresidents",   label: "Top 3 College-Based President Nominations",   list: top3CollegePresidents,   errorKey: "top3CollegePresidents" },
+          { key: "top3CommunityPresidents", label: "Top 3 Community-Based President Nominations", list: top3CommunityPresidents, errorKey: "top3CommunityPresidents" },
+          { key: "top3CollegeSecretaries",   label: "Top 3 College-Based Secretary Nominations",   list: top3CollegeSecretaries,   errorKey: "top3CollegeSecretaries" },
+          { key: "top3CommunitySecretaries", label: "Top 3 Community-Based Secretary Nominations", list: top3CommunitySecretaries, errorKey: "top3CommunitySecretaries" },
+        ] as const
+      ).map(({ key, label, list, errorKey }) => (
+        <div key={key} className="glass rounded-2xl p-5 grid gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
+              {label} <span className="text-[#f6b8a3]">*</span>
             </div>
-            <Field label="Full Name" required>
-              <input
-                className="input-field"
-                value={top3Presidents[i].name}
-                onChange={(e) => {
-                  const next = [...top3Presidents] as [OfficerNominee, OfficerNominee, OfficerNominee];
-                  next[i] = { ...next[i], name: e.target.value };
-                  update({ top3Presidents: next });
-                }}
-                placeholder="Rtr. Full Name"
-              />
-            </Field>
-            <Field label="Club Name" required>
-              <input
-                className="input-field"
-                value={top3Presidents[i].clubName}
-                onChange={(e) => {
-                  const next = [...top3Presidents] as [OfficerNominee, OfficerNominee, OfficerNominee];
-                  next[i] = { ...next[i], clubName: e.target.value };
-                  update({ top3Presidents: next });
-                }}
-                placeholder="RAC Club Name"
-              />
-            </Field>
+            <p className="text-sm text-[rgba(244,234,213,0.6)]">
+              All 3 nominees are required. Nominate from clubs other than your own.
+            </p>
+            {errors[errorKey] && (
+              <p className="mt-1 text-xs text-[#f6b8a3]">{errors[errorKey]}</p>
+            )}
           </div>
-        ))}
-      </div>
-
-      {/* ── Top 3 Secretary Nominations (mandatory) ── */}
-      <div className="glass rounded-2xl p-5 grid gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-[#d6ba73] mb-1">
-            Top 3 Secretary Nominations <span className="text-[#f6b8a3]">*</span>
-          </div>
-          <p className="text-sm text-[rgba(244,234,213,0.6)]">
-            Nominate 3 Secretaries from other clubs whom you feel deserve recognition. All 3 are required.
-          </p>
-          {errors.top3Secretaries && (
-            <p className="mt-1 text-xs text-[#f6b8a3]">{errors.top3Secretaries}</p>
-          )}
-        </div>
-        {([0, 1, 2] as const).map((i) => (
-          <div key={i} className="grid sm:grid-cols-2 gap-3 border border-[rgba(214,186,115,0.12)] rounded-xl p-4">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[rgba(244,234,213,0.4)] col-span-full mb-1">
-              Nominee {i + 1}
+          {([0, 1, 2] as const).map((i) => (
+            <div key={i} className="grid sm:grid-cols-2 gap-3 border border-[rgba(214,186,115,0.12)] rounded-xl p-4">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-[rgba(244,234,213,0.4)] col-span-full mb-1">
+                Nominee {i + 1}
+              </div>
+              <Field label="Full Name" required>
+                <input
+                  className="input-field"
+                  value={list[i].name}
+                  onChange={(e) => {
+                    const next = [...list] as [OfficerNominee, OfficerNominee, OfficerNominee];
+                    next[i] = { ...next[i], name: e.target.value };
+                    update({ [key]: next } as Partial<OfficerData>);
+                  }}
+                  placeholder="Rtr. Full Name"
+                />
+              </Field>
+              <Field label="Club Name" required>
+                <input
+                  className="input-field"
+                  value={list[i].clubName}
+                  onChange={(e) => {
+                    const next = [...list] as [OfficerNominee, OfficerNominee, OfficerNominee];
+                    next[i] = { ...next[i], clubName: e.target.value };
+                    update({ [key]: next } as Partial<OfficerData>);
+                  }}
+                  placeholder="RAC Club Name"
+                />
+              </Field>
             </div>
-            <Field label="Full Name" required>
-              <input
-                className="input-field"
-                value={top3Secretaries[i].name}
-                onChange={(e) => {
-                  const next = [...top3Secretaries] as [OfficerNominee, OfficerNominee, OfficerNominee];
-                  next[i] = { ...next[i], name: e.target.value };
-                  update({ top3Secretaries: next });
-                }}
-                placeholder="Rtr. Full Name"
-              />
-            </Field>
-            <Field label="Club Name" required>
-              <input
-                className="input-field"
-                value={top3Secretaries[i].clubName}
-                onChange={(e) => {
-                  const next = [...top3Secretaries] as [OfficerNominee, OfficerNominee, OfficerNominee];
-                  next[i] = { ...next[i], clubName: e.target.value };
-                  update({ top3Secretaries: next });
-                }}
-                placeholder="RAC Club Name"
-              />
-            </Field>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
