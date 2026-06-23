@@ -22,6 +22,8 @@ type ProjectEntry = {
   media: string;
 };
 
+type OfficerNominee = { name: string; clubName: string };
+
 type OfficerData = {
   name: string;
   selfEval: string;
@@ -39,6 +41,10 @@ type OfficerData = {
   professionalImage?: string;
   challengeThisYear?: string;
   top3DO?: [string, string, string];
+  top3CollegePresidents?: OfficerNominee[];
+  top3CommunityPresidents?: OfficerNominee[];
+  top3CollegeSecretaries?: OfficerNominee[];
+  top3CommunitySecretaries?: OfficerNominee[];
 };
 
 type Submission = {
@@ -1235,6 +1241,33 @@ function OfficerCard({ officer }: { officer: OfficerData }) {
           </ol>
         </div>
       )}
+
+      {(
+        [
+          { key: "top3CollegePresidents"   as const, label: "Top 3 College President Nominations"   },
+          { key: "top3CommunityPresidents" as const, label: "Top 3 Community President Nominations" },
+          { key: "top3CollegeSecretaries"  as const, label: "Top 3 College Secretary Nominations"   },
+          { key: "top3CommunitySecretaries"as const, label: "Top 3 Community Secretary Nominations" },
+        ] as const
+      ).map(({ key, label }) => {
+        const list = officer[key];
+        if (!Array.isArray(list) || !list.some((n) => n?.name?.trim())) return null;
+        return (
+          <div key={key}>
+            <div className="text-xs text-[rgba(244,234,213,0.45)] mb-1">{label}</div>
+            <ol className="list-decimal list-inside space-y-1">
+              {list.filter((n) => n?.name?.trim()).map((n, i) => (
+                <li key={i} className="text-sm text-[rgba(244,234,213,0.85)]">
+                  {n.name}
+                  {n.clubName && (
+                    <span className="ml-1 text-xs text-[rgba(244,234,213,0.45)]">· {n.clubName}</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        );
+      })}
     </div>
   );
 }
